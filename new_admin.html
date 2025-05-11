@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Нова Панель Адміністратора</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
+        header { background-color: #333; color: white; padding: 15px 20px; text-align: center; }
+        .main-container { display: flex; flex-grow: 1; }
+        nav.sidebar { width: 200px; background-color: #f4f4f4; padding: 15px; border-right: 1px solid #ddd; }
+        nav.sidebar ul { list-style-type: none; padding: 0; margin: 0; }
+        nav.sidebar ul li a {
+            display: block; padding: 10px 15px; text-decoration: none; color: #333;
+            border-radius: 4px; margin-bottom: 5px; cursor: pointer;
+        }
+        nav.sidebar ul li a:hover, nav.sidebar ul li a.active {
+            background-color: #007bff; color: white;
+        }
+        .content-area { flex-grow: 1; padding: 20px; background-color: #fff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1, h2, h3 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0; }
+        h4 { margin-top: 10px; margin-bottom: 5px;}
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="number"], input[type="date"], input[type="password"], select, textarea, input[type="file"] {
+            width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
+        }
+        input[type="checkbox"] { width: auto; margin-right: 5px; vertical-align: middle;}
+        button, .button { 
+            background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; margin-right: 5px; text-decoration: none; display: inline-block;
+        }
+        button:hover, .button:hover { background-color: #0056b3; }
+        button.delete-btn, .button.delete-btn { background-color: #dc3545; }
+        button.delete-btn:hover, .button.delete-btn:hover { background-color: #c82333; }
+        button.secondary-btn, .button.secondary-btn { background-color: #6c757d; }
+        button.secondary-btn:hover, .button.secondary-btn:hover { background-color: #545b62; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; }
+        th { background-color: #f0f0f0; font-weight: bold; }
+        .item-row { margin-bottom: 10px; padding: 10px; border: 1px solid #eee; border-radius: 4px; background-color: #f9f9f9; display: flex; align-items: center; gap: 10px; }
+        .item-row input { margin-bottom: 0; } 
+        
+        #apiResponseContainer {
+            position: fixed; bottom: 0; left: 0; right: 0; background-color: #333; color: white;
+            padding: 0; margin: 0; z-index: 1000; border-top: 1px solid #555;
+        }
+        #apiResponse {
+             padding: 10px 20px; 
+             margin-left: 220px; 
+             font-family: monospace; white-space: pre-wrap; word-wrap: break-word;
+             max-height: 100px; overflow-y: auto;
+        }
+        
+        /* Стилі для Модального вікна */
+        .modal { display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 700px; border-radius: 8px; position: relative; }
+        .modal-close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; line-height: 1; }
+        .modal-close-btn:hover, .modal-close-btn:focus { color: black; text-decoration: none; cursor: pointer; }
+        .modal-header h2 { margin-top: 0; font-size: 1.5em; }
+        .modal-tabs, .product-subtabs { /* Спільні стилі для вкладок */
+            overflow: hidden; border-bottom: 1px solid #ccc; margin-bottom: 15px;
+        }
+        .modal-tabs button, .product-subtabs button {
+            background-color: inherit; float: left; border: none; outline: none; cursor: pointer; padding: 10px 15px; transition: 0.3s; font-size: 0.95em; color: #333; border-radius: 4px 4px 0 0; 
+        }
+        .modal-tabs button:hover, .product-subtabs button:hover { background-color: #ddd; }
+        .modal-tabs button.active, .product-subtabs button.active { background-color: #007bff; color: white; }
+        .modal-tab-content, .product-subtab-content { /* Спільні стилі для вмісту вкладок */
+            display: none; padding: 0px 5px; border-top: none;
+        }
+        .modal-tab-content.active, .product-subtab-content.active { display: block; }
+        #modalAdditionalBarcodesContainer .item-row input.additional-barcode-value { width: 60%; }
+        #modalAdditionalBarcodesContainer .item-row input.additional-barcode-description { width: calc(30% - 10px); }
+        #modalAdditionalBarcodesContainer .item-row button.remove-additional-barcode-btn { width: auto; padding: 5px 10px; font-size: 0.9em; }
+
+        @media (max-width: 768px) {
+            .main-container { flex-direction: column; }
+            nav.sidebar { width: 100%; border-right: none; border-bottom: 1px solid #ddd; }
+            #apiResponse { margin-left: 0; }
+            #apiResponseContainer { padding-bottom: 5px; } 
+            .modal-content { width: 95%; margin: 5% auto; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+    <h1>Панель Керування POS - Адміністратор</h1>
+    <button id="logoutBtnAdmin" style="background-color: #dc3545; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; position: absolute; top: 15px; right: 20px;">Вийти</button>
+</header>
+    <div class="main-container">
+        <nav class="sidebar">
+            <ul>
+                <li><a data-tab="dashboard">Головна</a></li>
+                <li><a data-tab="stores">Магазини</a></li>
+                <li><a data-tab="users">Користувачі</a></li>
+                <li><a data-tab="products">Номенклатура</a></li>
+                <li><a data-tab="purchases">Закупівлі</a></li>
+                <li><a data-tab="sales">Продажі</a></li>
+                <li><a data-tab="reports">Звіти</a></li>
+            </ul>
+        </nav>
+        <main class="content-area">
+            <div id="dashboard" class="tab-content">
+                <h2>Головна сторінка</h2><p>Ласкаво просимо до панелі адміністратора!</p>
+            </div>
+
+            <div id="stores" class="tab-content">
+    <h2>Магазини</h2>
+    <div class="container" style="box-shadow: none; padding-top: 0;"> <!-- Забираємо тінь і верхній padding у основного контейнера вкладки -->
+        <button type="button" id="addNewStoreBtn" style="margin-bottom: 20px;">+ Додати новий магазин</button>
+        <h3>Список Магазинів:</h3>
+        <table id="storesTable">
+            <thead><tr><th>ID</th><th>Назва</th><th>Адреса</th><th>Дії</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Модальне вікно для Магазинів -->
+    <div id="storeModal" class="modal">
+        <div class="modal-content">
+            <span id="closeStoreModalBtn" class="modal-close-btn">×</span>
+            <div class="modal-header">
+                <h2 id="storeModalTitle">Додати Магазин</h2>
+            </div>
+            <form id="storeModalForm">
+                <input type="hidden" id="modalStoreId">
+                <div>
+                    <label for="modalStoreName">Назва магазину:</label>
+                    <input type="text" id="modalStoreName" required>
+                </div>
+                <div>
+                    <label for="modalStoreAddress">Адреса (опціонально):</label>
+                    <input type="text" id="modalStoreAddress">
+                </div>
+                <hr style="margin-top: 20px;">
+                <button type="submit">Зберегти</button>
+                <button type="button" id="cancelStoreModalBtn" class="secondary-btn">Скасувати</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+            <div id="users" class="tab-content">
+    <h2>Користувачі / Касири</h2>
+    <div class="container" style="box-shadow: none; padding-top: 0;">
+        <button type="button" id="addNewUserBtn" style="margin-bottom: 20px;">+ Додати нового користувача</button>
+        <h3>Список Користувачів:</h3>
+        <table id="usersTable">
+            <thead><tr><th>ID</th><th>Логін</th><th>ПІБ</th><th>ID Магазину</th><th>Роль</th><th>Активний</th><th>Дії</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Модальне вікно для Користувачів -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <span id="closeUserModalBtn" class="modal-close-btn">×</span>
+            <div class="modal-header">
+                <h2 id="userModalTitle">Додати Користувача</h2>
+            </div>
+            <form id="userModalForm">
+                <input type="hidden" id="modalUserId">
+                <div>
+                    <label for="modalUserUsername">Логін (username):</label>
+                    <input type="text" id="modalUserUsername" required>
+                </div>
+                <div>
+                    <label for="modalUserPassword">Пароль (новий або для зміни):</label>
+                    <input type="password" id="modalUserPassword" placeholder="Залиште порожнім, щоб не змінювати">
+                </div>
+                <div>
+                    <label for="modalUserFullName">Повне ім'я:</label>
+                    <input type="text" id="modalUserFullName">
+                </div>
+                <div>
+                    <label for="modalUserStoreId">ID Магазину (порожнє, якщо не прив'язаний):</label>
+                    <input type="number" id="modalUserStoreId" placeholder="Необов'язково">
+                </div>
+                <div>
+                    <label for="modalUserRole">Роль:</label>
+                    <select id="modalUserRole" required>
+                        <option value="cashier">Касир</option>
+                        <option value="admin">Адміністратор</option>
+                        <option value="manager">Менеджер</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="modalUserIsActive" style="display: inline-block; margin-right: 5px;">Активний:</label>
+                    <input type="checkbox" id="modalUserIsActive" checked>
+                </div>
+                <br>
+                <hr style="margin-top: 15px; margin-bottom:15px;">
+                <button type="submit">Зберегти</button>
+                <button type="button" id="cancelUserModalBtn" class="secondary-btn">Скасувати</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+            <div id="products" class="tab-content">
+                <h2>Номенклатура (Товари)</h2>
+                <div class="product-subtabs" style="margin-bottom: 20px;">
+                    <button class="product-subtab-button active" data-product-subtab="productListSubTab">Список товарів</button>
+                    <button class="product-subtab-button" data-product-subtab="productImportExportSubTab">Імпорт / Експорт</button>
+                </div>
+
+                <div id="productListSubTab" class="product-subtab-content active">
+                    <div class="container" style="padding-top:0; box-shadow: none;">
+                        <button type="button" id="addNewProductBtn" style="margin-bottom: 20px;">+ Додати новий товар</button>
+                        <h3>Список Товарів:</h3>
+                        <table id="productsTable">
+                            <thead><tr><th>ID</th><th>Назва</th><th>Осн. ШК</th><th>Ціна</th><th>Од.</th><th>Дод. ШК (к-сть)</th><th>Дії</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="productImportExportSubTab" class="product-subtab-content">
+                    <div class="container" style="padding-top:0; box-shadow: none;">
+                        <h3>Експорт даних</h3>
+                        <button type="button" id="exportProductsBtn" style="margin-bottom: 10px;" class="secondary-btn">Експорт Товарів (Excel)</button>
+                        <button type="button" id="exportBarcodesBtn" style="margin-bottom: 20px; margin-left: 10px;" class="secondary-btn">Експорт Штрихкодів (Excel)</button>
+                        <hr>
+                        <h3>Імпорт даних</h3>
+                        <div style="margin-bottom: 15px;">
+                            <label for="importProductsFile">Імпорт Товарів (з Excel):</label>
+                            <input type="file" id="importProductsFile" accept=".xlsx, .xls" style="display: block; margin-bottom: 5px;">
+                            <button type="button" id="processImportProductsBtn">Завантажити та обробити товари</button>
+                            <p style="font-size: 0.8em; color: #666;">Файл має мати колонки: 'ID' (для оновлення, опціонально), 'Назва Товару', 'Основний ШК', 'Роздрібна Ціна', 'Одиниця Виміру'.</p>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label for="importBarcodesFile">Імпорт Штрихкодів (з Excel):</label>
+                            <input type="file" id="importBarcodesFile" accept=".xlsx, .xls" style="display: block; margin-bottom: 5px;">
+                            <button type="button" id="processImportBarcodesBtn">Завантажити та обробити штрихкоди</button>
+                            <p style="font-size: 0.8em; color: #666;">Файл має мати колонки: 'ID Товару', 'Значення Штрихкоду', 'Опис Штрихкоду' (опціонально).</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="productModal" class="modal">
+                    <div class="modal-content">
+                        <span id="closeProductModalBtn" class="modal-close-btn">×</span>
+                        <div class="modal-header"><h2 id="productModalTitle">Додати Товар</h2></div>
+                        <div class="modal-tabs">
+                            <button class="modal-tab-button active" data-modal-tab="productMainInfoTab">Основне</button>
+                            <button class="modal-tab-button" data-modal-tab="productBarcodesTab">Штрихкоди</button>
+                        </div>
+                        <form id="productModalForm">
+                            <input type="hidden" id="modalProductId">
+                            <div id="productMainInfoTab" class="modal-tab-content active">
+                                <div><label for="modalProductName">Назва товару:</label><input type="text" id="modalProductName" required></div>
+                                <div><label for="modalProductRetailPrice">Роздрібна ціна (грн):</label><input type="number" id="modalProductRetailPrice" step="0.01" required></div>
+                                <div><label for="modalProductUnit">Одиниця виміру:</label><input type="text" id="modalProductUnit" value="шт"></div>
+                                <div><label for="modalMainProductBarcode">Основний/Інформаційний Штрихкод:</label><input type="text" id="modalMainProductBarcode"></div>
+                            </div>
+                            <div id="productBarcodesTab" class="modal-tab-content">
+                                <h4>Додаткові штрихкоди:</h4><div id="modalAdditionalBarcodesContainer"></div>
+                                <button type="button" id="modalAddAdditionalBarcodeBtn" style="margin-top: 5px; margin-bottom:15px;">+ Додати штрихкод</button>
+                            </div>
+                            <hr style="margin-top: 20px;"><button type="submit">Зберегти</button><button type="button" id="cancelProductModalBtn" class="secondary-btn">Скасувати</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div id="purchases" class="tab-content">
+    <h2>Документи Закупівлі (Приходу)</h2>
+
+    <div class="container" style="box-shadow: none; padding-top: 0;">
+        <button type="button" id="addNewPurchaseDocBtn" style="margin-bottom: 20px;">+ Створити новий документ закупівлі</button>
+        <h3>Список Документів Закупівлі:</h3>
+        <table id="purchasesTable">
+            <thead><tr><th>ID Док.</th><th>Дата</th><th>Магазин</th><th>Номер накл.</th><th>Сума</th><th>Дії</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Модальне вікно для Документа Закупівлі -->
+    <div id="purchaseModal" class="modal">
+        <div class="modal-content" style="max-width: 850px;"> <!-- Збільшимо ширину модалки -->
+            <span id="closePurchaseModalBtn" class="modal-close-btn">×</span>
+            <div class="modal-header">
+                <h2 id="purchaseModalTitle">Створити Документ Закупівлі</h2>
+            </div>
+            <form id="purchaseModalForm">
+                <input type="hidden" id="modalPurchaseDocId"> <!-- Для майбутнього редагування -->
+                <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                    <div style="flex: 1;">
+                        <label for="modalPurchaseStoreId">Магазин (куди прихід):</label>
+                        <select id="modalPurchaseStoreId" required></select>
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="modalPurchaseDate">Дата документа:</label>
+                        <input type="date" id="modalPurchaseDate" required>
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="modalPurchaseDocNumber">Номер вхідної накладної (опц.):</label>
+                        <input type="text" id="modalPurchaseDocNumber">
+                    </div>
+                </div>
+                
+                <hr>
+                <h3>Товари в документі:</h3>
+                
+                <!-- Поля для пошуку та додавання товару (поки що прості) -->
+                <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; padding: 10px; border: 1px solid #eee; background-color: #f9f9f9;">
+                    <div style="flex: 1;">
+                        <label for="modalPurchaseProductIdInput">ID Товару для додавання:</label>
+                        <input type="number" id="modalPurchaseProductIdInput" placeholder="Введіть ID товару">
+                    </div>
+                    <div style="flex: 0 0 100px;"> <!-- Фіксована ширина для кількості -->
+                         <label for="modalPurchaseProductQtyInput">К-сть:</label>
+                         <input type="number" id="modalPurchaseProductQtyInput" step="0.001" value="1">
+                    </div>
+                    <div style="flex: 0 0 120px;"> <!-- Фіксована ширина для ціни -->
+                         <label for="modalPurchaseProductPriceInput">Ціна закуп.:</label>
+                         <input type="number" id="modalPurchaseProductPriceInput" step="0.01" placeholder="0.00">
+                    </div>
+                    <button type="button" id="addProductToPurchaseModalBtn" class="secondary-btn" style="height: 40px; white-space: nowrap;">Додати товар</button>
+                </div>
+
+                <table id="modalPurchaseItemsTable" style="width: 100%; margin-bottom: 15px;">
+                    <thead>
+                        <tr>
+                            <th style="width:40%">Назва Товару (ID)</th>
+                            <th style="width:15%">К-сть</th>
+                            <th style="width:20%">Ціна закуп.</th>
+                            <th style="width:20%">Сума</th>
+                            <th style="width:5%">Дія</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalPurchaseItemsTableBody">
+                        <!-- Рядки товарів будуть додаватися сюди -->
+                    </tbody>
+                </table>
+                <h4 style="text-align: right;">Загальна сума по документу: <span id="modalPurchaseTotalAmount">0.00</span> грн</h4>
+
+                <hr style="margin-top: 20px;">
+                <button type="submit">Зберегти Документ</button>
+                <button type="button" id="cancelPurchaseModalBtn" class="secondary-btn">Скасувати</button>
+            </form>
+        </div>
+    </div>
+    <!-- Кінець модального вікна -->
+
+    <div class="container" style="margin-top: 30px;">
+        <h3>Всі Партії Товарів (з purchase_items):</h3>
+        <button type="button" id="fetchAllPurchaseItemsBtn" style="margin-bottom: 15px;">Оновити список всіх партій</button>
+        <table id="purchaseItemsTable">
+            <thead><tr><th>ID Партії</th><th>ID Док.</th><th>Дата</th><th>ID Товару</th><th>Назва Товару</th><th>ID Магазину</th><th>Назва Магазину</th><th>Поч. К-сть</th><th>Залишок</th><th>Ціна закуп.</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+            <div id="sales" class="tab-content">
+    <h2>Чеки Продажу</h2>
+
+    <div class="container" style="box-shadow: none; padding-top: 0;">
+        <button type="button" id="addNewSaleBtn" style="margin-bottom: 20px;">+ Створити новий чек</button>
+        <h3>Список Створених Чеків:</h3>
+        <table id="salesTable">
+            <thead><tr><th>ID Чека</th><th>Номер</th><th>Дата</th><th>Магазин</th><th>Касир</th><th>Сума (округ.)</th><th>Метод</th><th>Дії</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Модальне вікно для Чеку Продажу -->
+    <div id="saleModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;"> <!-- Можна зробити ширшим -->
+            <span id="closeSaleModalBtn" class="modal-close-btn">×</span>
+            <div class="modal-header">
+                <h2 id="saleModalTitle">Створити Новий Чек</h2>
+            </div>
+            <form id="saleModalForm">
+                <input type="hidden" id="modalSaleId"> <!-- Для майбутнього (хоча чеки зазвичай не редагують) -->
+                <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                    <div style="flex: 1;">
+                        <label for="modalSaleStoreId">Магазин:</label>
+                        <select id="modalSaleStoreId" required></select>
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="modalSaleUserId">Касир/Користувач:</label>
+                        <select id="modalSaleUserId" required></select>
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="modalSalePaymentMethod">Метод оплати:</label>
+                        <select id="modalSalePaymentMethod" required>
+                            <option value="Готівка">Готівка</option>
+                            <option value="Картка">Картка</option>
+                            <option value="Змішана">Змішана</option> <!-- Залишив, якщо потрібно -->
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="modalSaleOverallDiscount">Загальна знижка на чек (%):</label>
+                    <input type="number" id="modalSaleOverallDiscount" value="0" step="0.1" min="0" max="100" style="width: 150px; margin-bottom:15px;">
+                </div>
+                
+                <hr>
+                <h3>Товари в чеку:</h3>
+                
+                <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; padding: 10px; border: 1px solid #eee; background-color: #f9f9f9;">
+                    <div style="flex: 2;">
+                        <label for="modalSaleProductIdInput">ID або Штрихкод Товару:</label>
+                        <input type="text" id="modalSaleProductIdInput" placeholder="Введіть ID або штрихкод">
+                    </div>
+                    <div style="flex: 1 0 80px;">
+                         <label for="modalSaleProductQtyInput">К-сть:</label>
+                         <input type="number" id="modalSaleProductQtyInput" step="0.001" value="1">
+                    </div>
+                    <!-- Ціну продажу будемо брати з довідника, але дозволимо редагувати -->
+                    <div style="flex: 1 0 100px;">
+                         <label for="modalSaleProductPriceInput">Ціна продажу:</label>
+                         <input type="number" id="modalSaleProductPriceInput" step="0.01" placeholder="0.00">
+                    </div>
+                     <div style="flex: 1 0 100px;">
+                         <label for="modalSaleProductDiscountInput">Знижка на товар (%):</label>
+                         <input type="number" id="modalSaleProductDiscountInput" step="0.1" value="0" min="0" max="100">
+                    </div>
+                    <button type="button" id="addProductToSaleModalBtn" class="secondary-btn" style="height: 40px; white-space: nowrap;">Додати товар</button>
+                </div>
+
+                <table id="modalSaleItemsTable" style="width: 100%; margin-bottom: 15px;">
+                    <thead>
+                        <tr>
+                            <th style="width:30%">Назва (ID)</th>
+                            <th style="width:10%">К-сть</th>
+                            <th style="width:15%">Ціна</th>
+                            <th style="width:15%">Знижка (%)</th>
+                            <th style="width:15%">Сума</th>
+                            <th style="width:10%">Собіварт. (FIFO)</th> <!-- Поки не розраховуємо на фронті -->
+                            <th style="width:5%">Дія</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalSaleItemsTableBody">
+                        <!-- Рядки товарів -->
+                    </tbody>
+                </table>
+                <h4 style="text-align: right;">Сума без знижок: <span id="modalSaleTotalUnrounded">0.00</span> грн</h4>
+                <h4 style="text-align: right;">Сума зі знижками (до округлення): <span id="modalSaleTotalWithDiscount">0.00</span> грн</h4>
+                <h3 style="text-align: right;">ВСЬОГО до сплати (округлено): <span id="modalSaleTotalRounded">0.00</span> грн</h3>
+
+                <hr style="margin-top: 20px;">
+                <button type="submit">Оформити Продаж та Створити Чек</button>
+                <button type="button" id="cancelSaleModalBtn" class="secondary-btn">Скасувати</button>
+            </form>
+        </div>
+    </div>
+    <!-- Кінець модального вікна -->
+</div>
+            
+            <div id="reports" class="tab-content">
+                <h2>Звіти</h2><p>Ця секція для майбутніх звітів.</p>
+            </div>
+        </main>
+    </div>
+    <div id="apiResponseContainer"><div id="apiResponse">Відповідь API: ...</div></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script type="module" src="js/app.js"></script> 
+</body>
+</html>

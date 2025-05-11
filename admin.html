@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель Адміністратора POS</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1, h2, h3 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0; }
+        h1 { margin-bottom: 30px; text-align: center;}
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="number"], input[type="date"], input[type="password"], select, textarea {
+            width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; margin-right: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button.delete-btn { background-color: #dc3545; }
+        button.delete-btn:hover { background-color: #c82333; }
+        .error { color: red; font-weight: bold; }
+        .success { color: green; font-weight: bold; }
+        hr { margin: 30px 0; border: 0; border-top: 1px solid #ccc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; }
+        th { background-color: #f0f0f0; font-weight: bold; }
+        td button { font-size: 0.85em; padding: 5px 10px;}
+        .item-row { margin-bottom: 10px; padding: 10px; border: 1px solid #eee; border-radius: 4px; background-color: #f9f9f9; }
+        #apiResponse { margin-top: 20px; padding: 15px; border: 1px solid #ccc; background-color: #e9e9e9; border-radius: 4px; font-family: monospace; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto;}
+    </style>
+</head>
+<body>
+
+    <h1>Панель Керування POS</h1>
+
+    <!-- Секція Магазинів -->
+    <div class="container">
+        <h2>Магазини</h2>
+        <form id="storeForm">
+            <input type="hidden" id="storeId">
+            <div><label for="storeName">Назва магазину:</label><input type="text" id="storeName" required></div>
+            <div><label for="storeAddress">Адреса (опціонально):</label><input type="text" id="storeAddress"></div>
+            <button type="submit">Зберегти Магазин</button>
+            <button type="button" onclick="clearStoreForm()">Очистити</button>
+        </form>
+        <h3>Список Магазинів:</h3>
+        <table id="storesTable"><thead><tr><th>ID</th><th>Назва</th><th>Адреса</th><th>Дії</th></tr></thead><tbody></tbody></table>
+    </div>
+    <hr>
+
+    <!-- Секція Користувачів -->
+    <div class="container">
+        <h2>Користувачі / Касири</h2>
+        <form id="userForm">
+            <input type="hidden" id="userId">
+            <div><label for="userUsername">Логін (username):</label><input type="text" id="userUsername" required></div>
+            <div><label for="userPassword">Пароль (новий або для зміни):</label><input type="password" id="userPassword"></div>
+            <div><label for="userFullName">Повне ім'я:</label><input type="text" id="userFullName"></div>
+            <div><label for="userStoreId">ID Магазину (залиште порожнім, якщо не прив'язаний):</label><input type="number" id="userStoreId"></div>
+            <div><label for="userRole">Роль:</label><select id="userRole" required><option value="cashier">Касир</option><option value="admin">Адміністратор</option><option value="manager">Менеджер</option></select></div>
+            <div><label for="userIsActive">Активний:</label><input type="checkbox" id="userIsActive" checked style="width: auto; margin-bottom: 0;"></div>
+            <br>
+            <button type="submit">Зберегти Користувача</button>
+            <button type="button" onclick="clearUserForm()">Очистити</button>
+        </form>
+        <h3>Список Користувачів:</h3>
+        <table id="usersTable"><thead><tr><th>ID</th><th>Логін</th><th>ПІБ</th><th>ID Магазину</th><th>Роль</th><th>Активний</th><th>Дії</th></tr></thead><tbody></tbody></table>
+    </div>
+    <hr>
+
+    <!-- Секція Товарів -->
+    <div class="container">
+        <h2>Товари</h2>
+        <form id="productForm">
+            <input type="hidden" id="productId">
+            <div><label for="productBarcode">Штрихкод:</label><input type="text" id="productBarcode"></div>
+            <div><label for="productName">Назва товару:</label><input type="text" id="productName" required></div>
+            <div><label for="productRetailPrice">Роздрібна ціна (грн):</label><input type="number" id="productRetailPrice" step="0.01" required></div>
+            <div><label for="productUnit">Одиниця виміру:</label><input type="text" id="productUnit" value="шт"></div>
+            <button type="submit">Зберегти Товар</button>
+            <button type="button" onclick="clearProductForm()">Очистити</button>
+        </form>
+        <h3>Список Товарів:</h3>
+        <table id="productsTable"><thead><tr><th>ID</th><th>ШК</th><th>Назва</th><th>Ціна</th><th>Од.</th><th>Дії</th></tr></thead><tbody></tbody></table>
+    </div>
+    <hr>
+
+    <!-- Секція Документів Закупівлі -->
+    <div class="container">
+        <h2>Документи Закупівлі (Приходу)</h2>
+        <form id="purchaseDocumentForm">
+            <input type="hidden" id="purchaseDocId">
+            <div>
+                <label for="purchaseDocStoreId">ID Магазину (куди прихід):</label>
+                <select id="purchaseDocStoreId" required></select>
+            </div>
+            <div>
+                <label for="purchaseDocDate">Дата документа:</label>
+                <input type="date" id="purchaseDocDate" required>
+            </div>
+            <div>
+                <label for="purchaseDocNumber">Номер вхідної накладної (опціонально):</label>
+                <input type="text" id="purchaseDocNumber">
+            </div>
+            <h3>Товари в документі:</h3>
+            <div id="purchaseDocItemsContainer">
+            </div>
+            <button type="button" onclick="addPurchaseDocItemRow()">Додати товар</button>
+            <br><br>
+            <button type="submit">Зберегти Документ Закупівлі</button>
+            <button type="button" onclick="clearPurchaseDocumentForm()">Очистити форму</button>
+        </form>
+        <h3>Список Документів Закупівлі:</h3>
+        <table id="purchasesTable">
+            <thead><tr><th>ID Док.</th><th>Дата</th><th>Магазин</th><th>Номер накл.</th><th>Сума</th><th>Дії</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <hr>
+
+     <!-- Секція Продажів (Чеки) - для тестування -->
+    <div class="container">
+        <h2>Створення Тестового Чеку (Продажу)</h2>
+        <form id="saleForm">
+            <div>
+                <label for="saleStoreId">ID Магазину:</label>
+                <select id="saleStoreId" required></select>
+            </div>
+            <div>
+                <label for="saleUserId">ID Касира:</label>
+                <select id="saleUserId" required></select>
+            </div>
+             <div>
+                <label for="salePaymentMethod">Метод оплати:</label>
+                <select id="salePaymentMethod" required>
+                    <option value="Готівка">Готівка</option>
+                    <option value="Кредитка">Кредитка</option>
+                </select>
+            </div>
+            <div>
+                <label for="saleOverallDiscount">Загальна знижка (%):</label>
+                <input type="number" id="saleOverallDiscount" value="0" step="0.1" min="0" max="100">
+            </div>
+
+            <h3>Товари в чеку:</h3>
+            <div id="saleItemsContainer">
+                <!-- Позиції товарів для продажу -->
+            </div>
+            <button type="button" onclick="addSaleItemRow()">Додати товар у чек</button>
+            <br><br>
+            <button type="submit">Створити Чек</button>
+        </form>
+
+        <h3>Список Створених Чеків:</h3>
+        <table id="salesTable">
+            <thead><tr><th>ID Чека</th><th>Номер</th><th>Дата</th><th>Магазин</th><th>Касир</th><th>Сума (округ.)</th><th>Метод</th><th>Дії</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <hr>
+
+
+    <div class="container">
+        <h3>Всі Партії Товарів (з purchase_items):</h3>
+        <button type="button" onclick="fetchPurchaseItems()">Оновити список всіх партій</button>
+        <table id="purchaseItemsTable">
+             <thead><tr><th>ID Партії</th><th>ID Док.</th><th>Дата</th><th>ID Товару</th><th>Назва Товару</th><th>ID Магазину</th><th>Назва Магазину</th><th>Поч. К-сть</th><th>Залишок</th><th>Ціна закуп.</th></tr></thead>
+             <tbody></tbody>
+        </table>
+    </div>
+
+    <div id="apiResponse">Відповідь API: ...</div>
+
+<script>
+    const API_BASE_URL = 'http://localhost:3001/api';
+    const apiResponseDiv = document.getElementById('apiResponse');
+
+    // --- Функція округлення ---
+    function roundToNearest50Kop(amount) { if (typeof amount !== 'number' || isNaN(amount)) return 0; const multiplied = amount * 2; const rounded = Math.round(multiplied); const result = rounded / 2; return result; }
+
+    // --- Функції для Магазинів ---
+    const storeForm = document.getElementById('storeForm'); const storeIdInput = document.getElementById('storeId'); const storeNameInput = document.getElementById('storeName'); const storeAddressInput = document.getElementById('storeAddress'); const storesTableBody = document.querySelector('#storesTable tbody');
+    const purchaseDocStoreIdSelect = document.getElementById('purchaseDocStoreId'); // Для заповнення select
+    const saleStoreIdSelect = document.getElementById('saleStoreId'); // Для заповнення select
+
+    function clearStoreForm() { storeForm.reset(); storeIdInput.value = ''; }
+    async function fetchStores() { try { const response = await fetch(`${API_BASE_URL}/stores`); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const stores = await response.json(); storesTableBody.innerHTML = ''; purchaseDocStoreIdSelect.innerHTML = '<option value="">-- Магазин для закупки --</option>'; saleStoreIdSelect.innerHTML = '<option value="">-- Магазин для продажу --</option>'; stores.forEach(store => { const row = storesTableBody.insertRow(); row.innerHTML = `<td>${store.id}</td><td>${store.name}</td><td>${store.address || ''}</td><td><button onclick="editStore(${store.id}, '${store.name}', '${store.address || ''}')">Ред.</button> <button class="delete-btn" onclick="deleteStore(${store.id})">Вид.</button></td>`; let optionP = document.createElement('option'); optionP.value = store.id; optionP.textContent = store.name; purchaseDocStoreIdSelect.appendChild(optionP); let optionS = document.createElement('option'); optionS.value = store.id; optionS.textContent = store.name; saleStoreIdSelect.appendChild(optionS.cloneNode(true)); /* Клонуємо для іншого select */ }); apiResponseDiv.textContent = 'Список магазинів оновлено.'; } catch (error) { console.error('Помилка завантаження магазинів:', error); apiResponseDiv.textContent = `Помилка завантаження магазинів: ${error.message}`; } }
+    storeForm.addEventListener('submit', async (event) => { event.preventDefault(); const id = storeIdInput.value; const storeData = { name: storeNameInput.value, address: storeAddressInput.value || null }; const method = id ? 'PUT' : 'POST'; const url = id ? `${API_BASE_URL}/stores/${id}` : `${API_BASE_URL}/stores`; try { const response = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(storeData) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`); apiResponseDiv.textContent = `Магазин ${id ? 'оновлено' : 'створено'}: ${JSON.stringify(result)}`; clearStoreForm(); fetchStores(); } catch (error) { console.error('Помилка збереження магазину:', error); apiResponseDiv.textContent = `Помилка збереження магазину: ${error.message}`; } });
+    function editStore(id, name, address) { storeIdInput.value = id; storeNameInput.value = name; storeAddressInput.value = address; window.scrollTo(0, storeForm.offsetTop - 20); }
+    async function deleteStore(id) { if (!confirm(`Ви дійсно хочете видалити магазин ID: ${id}? Це може вплинути на пов'язані дані!`)) return; try { const response = await fetch(`${API_BASE_URL}/stores/${id}`, { method: 'DELETE' }); const result = await response.json(); if (!response.ok && response.status !== 200) throw new Error(result.error || `HTTP error! status: ${response.status}`); apiResponseDiv.textContent = `Магазин видалено: ${JSON.stringify(result)}`; fetchStores(); } catch (error) { console.error('Помилка видалення магазину:', error); apiResponseDiv.textContent = `Помилка видалення магазину: ${error.message}`; } }
+
+    // --- Функції для Користувачів ---
+    const userForm = document.getElementById('userForm'); const userIdInput = document.getElementById('userId'); const userUsernameInput = document.getElementById('userUsername'); const userPasswordInput = document.getElementById('userPassword'); const userFullNameInput = document.getElementById('userFullName'); const userStoreIdInput = document.getElementById('userStoreId'); const userRoleSelect = document.getElementById('userRole'); const userIsActiveCheckbox = document.getElementById('userIsActive'); const usersTableBody = document.querySelector('#usersTable tbody');
+    const saleUserIdSelect = document.getElementById('saleUserId'); // Для заповнення select
+
+    function clearUserForm() { userForm.reset(); userIdInput.value = ''; userIsActiveCheckbox.checked = true; }
+    async function fetchUsers() { try { const response = await fetch(`${API_BASE_URL}/users`); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const users = await response.json(); usersTableBody.innerHTML = ''; saleUserIdSelect.innerHTML = '<option value="">-- Касир --</option>'; users.forEach(user => { const row = usersTableBody.insertRow(); row.innerHTML = `<td>${user.id}</td><td>${user.username}</td><td>${user.full_name || ''}</td><td>${user.store_id || 'N/A'}</td><td>${user.role}</td><td>${user.is_active ? 'Так' : 'Ні'}</td><td><button onclick="editUser(${user.id}, '${user.username}', '${(user.full_name || '').replace(/'/g, "\\'")}', ${user.store_id || 'null'}, '${user.role}', ${user.is_active})">Ред.</button> <button class="delete-btn" onclick="deleteUser(${user.id})">Вид.</button></td>`; if(user.is_active){ const option = document.createElement('option'); option.value = user.id; option.textContent = `${user.full_name || user.username} (ID: ${user.id})`; saleUserIdSelect.appendChild(option); } }); apiResponseDiv.textContent = 'Список користувачів оновлено.'; } catch (error) { console.error('Помилка завантаження користувачів:', error); apiResponseDiv.textContent = `Помилка завантаження користувачів: ${error.message}`; } }
+    userForm.addEventListener('submit', async (event) => { event.preventDefault(); const id = userIdInput.value; const userData = { username: userUsernameInput.value, full_name: userFullNameInput.value || null, store_id: userStoreIdInput.value ? parseInt(userStoreIdInput.value) : null, role: userRoleSelect.value, is_active: userIsActiveCheckbox.checked }; if (userPasswordInput.value) { userData.password = userPasswordInput.value; } else if (!id) { alert('Пароль є обов\'язковим для нового користувача!'); return; } const method = id ? 'PUT' : 'POST'; const url = id ? `${API_BASE_URL}/users/${id}` : `${API_BASE_URL}/users`; try { const response = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userData) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`); apiResponseDiv.textContent = `Користувача ${id ? 'оновлено' : 'створено'}: ${JSON.stringify(result)}`; clearUserForm(); fetchUsers(); } catch (error) { console.error('Помилка збереження користувача:', error); apiResponseDiv.textContent = `Помилка збереження користувача: ${error.message}`; } });
+    function editUser(id, username, fullName, storeId, role, isActive) { userIdInput.value = id; userUsernameInput.value = username; userPasswordInput.value = ''; userFullNameInput.value = fullName; userStoreIdInput.value = storeId === null ? '' : storeId; userRoleSelect.value = role; userIsActiveCheckbox.checked = isActive; window.scrollTo(0, userForm.offsetTop - 20); }
+    async function deleteUser(id) { if (!confirm(`Ви дійсно хочете видалити користувача ID: ${id}?`)) return; try { const response = await fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE' }); const result = await response.json(); if (!response.ok && response.status !== 200) throw new Error(result.error || `HTTP error! status: ${response.status}`); apiResponseDiv.textContent = `Користувача видалено: ${result.message || JSON.stringify(result)}`; fetchUsers(); } catch (error) { console.error('Помилка видалення користувача:', error); apiResponseDiv.textContent = `Помилка видалення користувача: ${error.message}`; } }
+
+    // --- Функції для Товарів ---
+    const productForm = document.getElementById('productForm'); const productIdInput = document.getElementById('productId'); const productBarcode = document.getElementById('productBarcode'); const productName = document.getElementById('productName'); const productRetailPrice = document.getElementById('productRetailPrice'); const productUnit = document.getElementById('productUnit'); const productsTableBody = document.querySelector('#productsTable tbody');
+    function clearProductForm() { productForm.reset(); productIdInput.value = ''; }
+    async function fetchProducts() { try { const response = await fetch(`${API_BASE_URL}/products`); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const products = await response.json(); productsTableBody.innerHTML = ''; products.forEach(product => { const row = productsTableBody.insertRow(); row.innerHTML = `<td>${product.id}</td><td>${product.barcode || ''}</td><td>${product.name}</td><td>${parseFloat(product.retail_price).toFixed(2)}</td><td>${product.unit || 'шт'}</td><td><button onclick="editProduct(${product.id}, '${product.barcode || ''}', '${product.name.replace(/'/g, "\\'")}', ${product.retail_price}, '${product.unit || 'шт'}')">Ред.</button> <button class="delete-btn" onclick="deleteProduct(${product.id})">Вид.</button></td>`; }); apiResponseDiv.textContent = 'Список товарів оновлено.'; } catch (error) { console.error('Помилка завантаження товарів:', error); apiResponseDiv.textContent = `Помилка завантаження товарів: ${error.message}`; } }
+    productForm.addEventListener('submit', async (event) => { event.preventDefault(); const id = productIdInput.value; const productData = { barcode: productBarcode.value || null, name: productName.value, retail_price: parseFloat(productRetailPrice.value), unit: productUnit.value || 'шт' }; const method = id ? 'PUT' : 'POST'; const url = id ? `${API_BASE_URL}/products/${id}` : `${API_BASE_URL}/products`; try { const response = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(productData) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`); apiResponseDiv.textContent = `Товар ${id ? 'оновлено' : 'створено'}: ${JSON.stringify(result)}`; clearProductForm(); fetchProducts(); } catch (error) { console.error('Помилка збереження товару:', error); apiResponseDiv.textContent = `Помилка збереження товару: ${error.message}`; } });
+    function editProduct(id, barcode, name, price, unit) { productIdInput.value = id; productBarcode.value = barcode; productName.value = name; productRetailPrice.value = parseFloat(price).toFixed(2); productUnit.value = unit; window.scrollTo(0, productForm.offsetTop - 20); }
+    async function deleteProduct(id) { if (!confirm(`Ви дійсно хочете видалити товар ID: ${id}?`)) return; try { const response = await fetch(`${API_BASE_URL}/products/${id}`, { method: 'DELETE' }); const result = await response.json(); if (!response.ok && response.status !== 200) throw new Error(result.error || `HTTP error! status: ${response.status}`); apiResponseDiv.textContent = `Товар видалено: ${JSON.stringify(result)}`; fetchProducts(); } catch (error) { console.error('Помилка видалення товару:', error); apiResponseDiv.textContent = `Помилка видалення товару: ${error.message}`; } }
+
+    // --- Функції для Документів Закупівель ---
+    const purchaseDocumentForm = document.getElementById('purchaseDocumentForm'); const purchaseDocDateInput = document.getElementById('purchaseDocDate'); const purchaseDocNumberInput = document.getElementById('purchaseDocNumber'); const purchaseDocItemsContainer = document.getElementById('purchaseDocItemsContainer'); const purchasesTableBody = document.querySelector('#purchasesTable tbody'); let purchaseDocItemCounter = 0;
+    function clearPurchaseDocumentForm() { purchaseDocumentForm.reset(); purchaseDocItemsContainer.innerHTML = ''; purchaseDocItemCounter = 0; if(purchaseDocDateInput) purchaseDocDateInput.valueAsDate = new Date(); fetchStores(); /* Оновлюємо список магазинів для select */ }
+    function addPurchaseDocItemRow() { purchaseDocItemCounter++; const itemRow = document.createElement('div'); itemRow.classList.add('item-row'); itemRow.innerHTML = `<h4>Позиція ${purchaseDocItemCounter}</h4><label for="docPurchaseProductId_${purchaseDocItemCounter}">ID Товару:</label><input type="number" id="docPurchaseProductId_${purchaseDocItemCounter}" name="docPurchaseProductId" required><label for="docPurchaseQuantity_${purchaseDocItemCounter}">Кількість:</label><input type="number" id="docPurchaseQuantity_${purchaseDocItemCounter}" name="docPurchaseQuantity" step="0.001" required><label for="docPurchasePrice_${purchaseDocItemCounter}">Закупівельна ціна за од.:</label><input type="number" id="docPurchasePrice_${purchaseDocItemCounter}" name="docPurchasePrice" step="0.01" required><button type="button" class="delete-btn" onclick="this.parentElement.remove()">Видалити позицію</button>`; purchaseDocItemsContainer.appendChild(itemRow); }
+    purchaseDocumentForm.addEventListener('submit', async (event) => { event.preventDefault(); const items = []; const itemRows = purchaseDocItemsContainer.querySelectorAll('.item-row'); if (itemRows.length === 0) { alert('Додайте хоча б один товар у документ!'); return; } for (let i = 0; i < itemRows.length; i++) { const productId = itemRows[i].querySelector('input[name="docPurchaseProductId"]').value; const quantity = itemRows[i].querySelector('input[name="docPurchaseQuantity"]').value; const price = itemRows[i].querySelector('input[name="docPurchasePrice"]').value; if (!productId || !quantity || !price) { alert(`Заповніть всі поля для позиції ${i + 1}`); return; } items.push({ product_id: parseInt(productId), quantity: parseFloat(quantity), price_per_unit_purchase: parseFloat(price) }); } const purchaseData = { store_id: parseInt(purchaseDocStoreIdSelect.value), purchase_date: purchaseDocDateInput.value, document_number: purchaseDocNumberInput.value || null, items: items }; try { const response = await fetch(`${API_BASE_URL}/purchases`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(purchaseData) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`); apiResponseDiv.textContent = `Документ закупівлі створено: ${JSON.stringify(result)}`; clearPurchaseDocumentForm(); fetchPurchases(); fetchPurchaseItems(); } catch (error) { console.error('Помилка створення документа закупівлі:', error); apiResponseDiv.textContent = `Помилка створення документа закупівлі: ${error.message}`; } });
+    async function fetchPurchases() { try { const response = await fetch(`${API_BASE_URL}/purchases`); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const purchases = await response.json(); purchasesTableBody.innerHTML = ''; purchases.forEach(doc => { const row = purchasesTableBody.insertRow(); row.innerHTML = `<td>${doc.id}</td><td>${new Date(doc.purchase_date).toLocaleDateString('uk-UA')}</td><td>${doc.store_name} (ID: ${doc.store_id})</td><td>${doc.document_number || ''}</td><td>${parseFloat(doc.total_amount).toFixed(2)}</td><td><button onclick="viewPurchaseDetails(${doc.id})">Деталі</button></td>`; }); apiResponseDiv.textContent = 'Список документів закупівель оновлено.'; } catch (error) { console.error('Помилка завантаження документів закупівель:', error); apiResponseDiv.textContent = `Помилка завантаження документів закупівель: ${error.message}`; } }
+    async function viewPurchaseDetails(purchaseId) { try { const response = await fetch(`${API_BASE_URL}/purchases/${purchaseId}`); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const purchaseDoc = await response.json(); let detailsHtml = `<h3>Деталі Закупівлі ID: ${purchaseDoc.id}</h3><p>Дата: ${new Date(purchaseDoc.purchase_date).toLocaleDateString('uk-UA')}</p><p>Магазин: ${purchaseDoc.store_name} (ID: ${purchaseDoc.store_id})</p><p>Номер накл.: ${purchaseDoc.document_number || 'N/A'}</p><p>Загальна сума: ${parseFloat(purchaseDoc.total_amount).toFixed(2)}</p><h4>Товари:</h4><ul>`; purchaseDoc.items.forEach(item => { detailsHtml += `<li>${item.product_name} (ID: ${item.product_id}, ШК: ${item.product_barcode || 'N/A'}) - К-сть: ${item.quantity_initial}, Ціна: ${parseFloat(item.price_per_unit_purchase).toFixed(2)}</li>`; }); detailsHtml += `</ul>`; apiResponseDiv.innerHTML = detailsHtml; } catch (error) { console.error('Помилка завантаження деталей закупівлі:', error); apiResponseDiv.textContent = `Помилка завантаження деталей закупівлі: ${error.message}`; } }
+
+    // --- Функції для всіх Партій (purchase_items) ---
+    const purchaseItemsTableBody = document.querySelector('#purchaseItemsTable tbody');
+    async function fetchPurchaseItems() { try { const response = await fetch(`${API_BASE_URL}/purchases/all-items`); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const items = await response.json(); purchaseItemsTableBody.innerHTML = ''; items.forEach(item => { const row = purchaseItemsTableBody.insertRow(); row.innerHTML = `<td>${item.id}</td><td>${item.purchase_id || 'N/A'}</td><td>${new Date(item.purchase_date).toLocaleDateString('uk-UA')}</td><td>${item.product_id}</td><td>${item.product_name}</td><td>${item.store_id}</td><td>${item.store_name}</td><td>${item.quantity_initial}</td><td>${item.quantity_remaining}</td><td>${parseFloat(item.price_per_unit_purchase).toFixed(2)}</td>`; }); /* apiResponseDiv.textContent = 'Список партій оновлено.'; */ } catch (error) { console.error('Помилка завантаження партій:', error); apiResponseDiv.textContent = `Помилка завантаження партій: ${error.message}`; } }
+
+    // --- Функції для Продажів (Чеки) ---
+    const saleForm = document.getElementById('saleForm'); const salePaymentMethodSelect = document.getElementById('salePaymentMethod'); const saleOverallDiscountInput = document.getElementById('saleOverallDiscount'); const saleItemsContainer = document.getElementById('saleItemsContainer'); const salesTableBody = document.querySelector('#salesTable tbody'); let saleItemCounter = 0;
+    function addSaleItemRow() { saleItemCounter++; const itemRow = document.createElement('div'); itemRow.classList.add('item-row'); itemRow.innerHTML = `<h4>Позиція ${saleItemCounter}</h4><label for="saleProductId_${saleItemCounter}">ID Товару:</label><input type="number" id="saleProductId_${saleItemCounter}" name="saleProductId" required><label for="saleQuantity_${saleItemCounter}">Кількість:</label><input type="number" id="saleQuantity_${saleItemCounter}" name="saleQuantity" step="0.001" required><label for="salePrice_${saleItemCounter}">Ціна продажу за од.:</label><input type="number" id="salePrice_${saleItemCounter}" name="salePrice" step="0.01" required><label for="saleDiscount_${saleItemCounter}">Знижка на товар (%):</label><input type="number" id="saleDiscount_${saleItemCounter}" name="saleDiscount" step="0.1" value="0" min="0" max="100"><button type="button" class="delete-btn" onclick="this.parentElement.remove()">Видалити позицію</button>`; saleItemsContainer.appendChild(itemRow); }
+    saleForm.addEventListener('submit', async (event) => { event.preventDefault(); const items_sold = []; const itemRows = saleItemsContainer.querySelectorAll('.item-row'); if (itemRows.length === 0) { alert('Додайте хоча б один товар у чек!'); return; } for (let i = 0; i < itemRows.length; i++) { const productId = itemRows[i].querySelector('input[name="saleProductId"]').value; const quantity = itemRows[i].querySelector('input[name="saleQuantity"]').value; const price = itemRows[i].querySelector('input[name="salePrice"]').value; const discount = itemRows[i].querySelector('input[name="saleDiscount"]').value; if (!productId || !quantity || !price) { alert(`Заповніть ID товару, кількість та ціну для позиції ${i + 1}`); return; } items_sold.push({ product_id: parseInt(productId), quantity: parseFloat(quantity), price_per_unit_sold: parseFloat(price), discount_percent: parseFloat(discount) || 0 }); } const saleData = { store_id: parseInt(saleStoreIdSelect.value), user_id: parseInt(saleUserIdSelect.value), payment_method: salePaymentMethodSelect.value, overall_discount_percent: parseFloat(saleOverallDiscountInput.value) || 0, items_sold: items_sold }; try { const response = await fetch(`${API_BASE_URL}/sales`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saleData) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`); apiResponseDiv.textContent = `Чек створено: ${JSON.stringify(result)}`; saleForm.reset(); saleItemsContainer.innerHTML = ''; saleItemCounter = 0; fetchSales(); fetchPurchaseItems(); if (result.checkHtmlContent && printCheckModal) { showPrintCheckModal(result.checkNumber, result.checkHtmlContent); } } catch (error) { console.error('Помилка створення чека:', error); apiResponseDiv.textContent = `Помилка створення чека: ${error.message}`; } });
+    async function fetchSales() { try { const response = await fetch(`${API_BASE_URL}/sales`); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const sales = await response.json(); salesTableBody.innerHTML = ''; sales.forEach(sale => { const row = salesTableBody.insertRow(); row.innerHTML = `<td>${sale.id}</td><td>${sale.check_number_display}</td><td>${new Date(sale.sale_timestamp).toLocaleString('uk-UA')}</td><td>${sale.store_name} (ID: ${sale.store_id})</td><td>${sale.user_name} (ID: ${sale.user_id})</td><td>${parseFloat(sale.total_amount_rounded).toFixed(2)}</td><td>${sale.payment_method}</td><td><button onclick="viewSaleDetails(${sale.id})">Деталі</button></td>`; }); apiResponseDiv.textContent = 'Список чеків оновлено.'; } catch (error) { console.error('Помилка завантаження чеків:', error); apiResponseDiv.textContent = `Помилка завантаження чеків: ${error.message}`; } }
+    async function viewSaleDetails(saleId) { try { const response = await fetch(`${API_BASE_URL}/sales/${saleId}`); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const saleDoc = await response.json(); let detailsHtml = `<h3>Деталі Чека ID: ${saleDoc.id} (№ ${saleDoc.check_number_display})</h3><p>Дата: ${new Date(saleDoc.sale_timestamp).toLocaleString('uk-UA')}</p><p>Магазин: ${saleDoc.store_name} (ID: ${saleDoc.store_id})</p><p>Касир: ${saleDoc.user_name} (ID: ${saleDoc.user_id})</p><p>Метод оплати: ${saleDoc.payment_method}</p><p>Сума до округлення: ${parseFloat(saleDoc.total_amount_unrounded).toFixed(2)}</p><p>Загальна сума (округлена): ${parseFloat(saleDoc.total_amount_rounded).toFixed(2)}</p><p>Загальна знижка: ${saleDoc.overall_discount_percent}%</p><h4>Товари:</h4><ul>`; saleDoc.items.forEach(item => { detailsHtml += `<li>${item.product_name} (ID: ${item.product_id}, ШК: ${item.product_barcode || 'N/A'}) <br>    К-сть: ${item.quantity}, Ціна: ${parseFloat(item.price_per_unit_sold).toFixed(2)}, Знижка: ${item.discount_percent}%, Сума рядка: ${parseFloat(item.total_line_amount).toFixed(2)}, Собівартість FIFO: ${parseFloat(item.cost_of_goods_sold_fifo).toFixed(2)}</li><br>`; }); detailsHtml += `</ul>`; apiResponseDiv.innerHTML = detailsHtml; } catch (error) { console.error('Помилка завантаження деталей чека:', error); apiResponseDiv.textContent = `Помилка завантаження деталей чека: ${error.message}`; } }
+
+    // Функції друку чека
+    const printCheckModal = document.getElementById('printCheckModal');
+    const printCheckNumberDisplaySpan = document.getElementById('printCheckNumberDisplay');
+    const printActualCheckButton = document.getElementById('printActualCheckButton');
+    let currentCheckHtmlForPrint = null; // Переконайтеся, що ця змінна оголошена глобально в <script>
+
+    function showPrintCheckModal(checkNumber, htmlContent) { if (!printCheckModal || !printCheckNumberDisplaySpan || !printActualCheckButton) { console.warn("Елементи модального вікна друку не знайдені."); alert(`Чек №${checkNumber} створено. HTML для друку:\n${htmlContent}`); return; } if (!htmlContent) { console.error("Немає HTML для друку чеку:", checkNumber); apiResponseDiv.textContent = `Чек №${checkNumber || 'N/A'} створено, але HTML для друку відсутній.`; return; } printCheckNumberDisplaySpan.textContent = checkNumber || 'N/A'; currentCheckHtmlForPrint = htmlContent; printActualCheckButton.onclick = printCheckHtml; showModal(printCheckModal); }
+    function printCheckHtml() { if (!currentCheckHtmlForPrint) { alert("Немає даних чеку для друку."); return; } const printWindow = window.open('', '_blank', 'width=300,height=500'); if(printWindow){ printWindow.document.open(); printWindow.document.write(currentCheckHtmlForPrint); printWindow.document.close(); setTimeout(() => { try { printWindow.focus(); printWindow.print(); hideCurrentModal(); } catch (e) { console.error("Помилка виклику друку:", e); alert("Не вдалося автоматично викликати друк. Будь ласка, натисніть Ctrl+P у новому вікні."); } }, 500); } else { alert("Не вдалося відкрити вікно для друку. Перевірте блокувальник спливаючих вікон."); } }
+
+
+    // Початкове завантаження даних
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const storesResponse = await fetch(`${API_BASE_URL}/stores`);
+            if(storesResponse.ok) {
+                const stores = await storesResponse.json();
+                purchaseDocStoreIdSelect.innerHTML = '<option value="">-- Магазин для закупки --</option>';
+                saleStoreIdSelect.innerHTML = '<option value="">-- Магазин для продажу --</option>';
+                stores.forEach(store => {
+                    let optionP = document.createElement('option'); optionP.value = store.id; optionP.textContent = store.name; purchaseDocStoreIdSelect.appendChild(optionP);
+                    let optionS = document.createElement('option'); optionS.value = store.id; optionS.textContent = store.name; saleStoreIdSelect.appendChild(optionS.cloneNode(true));
+                });
+            } else { console.error("Не вдалося завантажити магазини для select'ів");}
+
+            const usersResponse = await fetch(`${API_BASE_URL}/users`);
+             if(usersResponse.ok) {
+                const users = await usersResponse.json();
+                saleUserIdSelect.innerHTML = '<option value="">-- Касир --</option>';
+                users.forEach(user => {
+                    if(user.is_active){ const option = document.createElement('option'); option.value = user.id; option.textContent = `${user.full_name || user.username} (ID: ${user.id})`; saleUserIdSelect.appendChild(option); }
+                });
+            } else { console.error("Не вдалося завантажити користувачів для select'a");}
+
+        } catch(e) { console.error("Помилка завантаження даних для select'ів:", e)}
+
+        fetchStores();
+        fetchProducts();
+        fetchUsers();
+        fetchPurchases();
+        fetchPurchaseItems();
+        fetchSales();
+        if(document.getElementById('purchaseDocDate')) document.getElementById('purchaseDocDate').valueAsDate = new Date();
+    });
+
+</script>
+</body>
+</html>

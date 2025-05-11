@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вхід - Sokrat POS</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f4f4; margin: 0; }
+        .login-container { background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h1 { text-align: center; color: #333; margin-bottom: 25px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+        input[type="text"], input[type="password"] {
+            width: calc(100% - 22px); padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; width: 100%;
+        }
+        button:hover { background-color: #0056b3; }
+        .error-message { color: red; text-align: center; margin-bottom: 15px; font-size: 0.9em; }
+        .loading-message { text-align: center; margin-bottom: 15px; font-size: 0.9em; color: #555;}
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>Sokrat POS</h1>
+        <form id="loginForm">
+            <div>
+                <label for="username">Логін:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div>
+                <label for="password">Пароль:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div id="errorMessage" class="error-message" style="display:none;"></div>
+            <div id="loadingMessage" class="loading-message" style="display:none;">Обробка...</div>
+            <button type="submit">Увійти</button>
+        </form>
+    </div>
+
+    <script>
+        // Простий обробник для форми входу
+        const loginForm = document.getElementById('loginForm');
+        const errorMessageDiv = document.getElementById('errorMessage');
+        const loadingMessageDiv = document.getElementById('loadingMessage');
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            errorMessageDiv.style.display = 'none';
+            errorMessageDiv.textContent = '';
+            loadingMessageDiv.style.display = 'block';
+
+            const username = event.target.username.value;
+            const password = event.target.password.value;
+
+            try {
+                const response = await fetch('/api/auth/login', { // Маршрут для логіну
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                loadingMessageDiv.style.display = 'none';
+
+                if (!response.ok) {
+                    throw new Error(data.error || `Помилка ${response.status}`);
+                }
+
+                // Зберігаємо токен (наприклад, в localStorage)
+                localStorage.setItem('authToken', data.token);
+                localStorage.setItem('userRole', data.role); // Зберігаємо роль для зручності
+                localStorage.setItem('username', data.username);
+                localStorage.setItem('userId', data.userId);
+                localStorage.setItem('storeId', data.storeId); // Якщо є і потрібно на фронтенді
+
+                // Перенаправлення залежно від ролі
+                if (data.role === 'admin' || data.role === 'manager') {
+                    window.location.href = '/new_admin.html'; // Шлях до адмін-панелі
+                } else if (data.role === 'cashier') {
+                    window.location.href = '/cashier.html'; // Шлях до інтерфейсу касира
+                } else {
+                    errorMessageDiv.textContent = 'Невідома роль користувача.';
+                    errorMessageDiv.style.display = 'block';
+                    localStorage.clear(); // Очищаємо, якщо роль не визначена
+                }
+
+            } catch (error) {
+                loadingMessageDiv.style.display = 'none';
+                errorMessageDiv.textContent = `Помилка входу: ${error.message}`;
+                errorMessageDiv.style.display = 'block';
+                console.error('Login error:', error);
+            }
+        });
+
+        // Перевірка, чи користувач вже залогінений, при завантаженні сторінки
+        // Якщо так, і ми на login.html, то перенаправляємо одразу
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('authToken');
+            const role = localStorage.getItem('userRole');
+            if (token && role) {
+                if (role === 'admin' || role === 'manager') {
+                    window.location.href = '/new_admin.html';
+                } else if (role === 'cashier') {
+                    window.location.href = '/cashier.html';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

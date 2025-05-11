@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Інтерфейс Касира - Sokrat POS</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f0f2f5; display: flex; flex-direction: column; min-height: 100vh; }
+        header { background-color: #007bff; color: white; padding: 15px 20px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative; }
+        header h1 { margin: 0; font-size: 1.5em; }
+
+        #logoutBtnCashier {
+            background-color: #dc3545; color:white; padding: 8px 15px;
+            border:none; border-radius:4px; cursor:pointer; font-size: 0.9em;
+            position: absolute; top: 12px; right: 20px;
+        }
+        #logoutBtnCashier:hover { background-color: #c82333; }
+
+        .cashier-main-container { display: flex; flex-grow: 1; padding: 15px; gap: 15px; }
+
+        .left-panel { flex: 2; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .right-panel { flex: 1; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        h2 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="number"], select {
+            width: calc(100% - 20px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+        }
+        button { background-color: #28a745; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #218838; }
+        button.danger-btn { background-color: #ffc107; color: #212529; }
+        button.danger-btn:hover { background-color: #e0a800; }
+
+        #foundProductsContainer .product-item { border: 1px solid #eee; padding: 10px; margin-bottom: 5px; border-radius: 4px; cursor: pointer; }
+        #foundProductsContainer .product-item:hover { background-color: #f9f9f9; }
+        
+        #checkItemsTable { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        #checkItemsTable th, #checkItemsTable td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        #checkItemsTable th { background-color: #f8f9fa; }
+        #checkItemsTable input[type="number"] { width: 60px; padding: 5px; }
+        #checkItemsTable .item-actions button { padding: 3px 8px; font-size: 0.8em; background-color: #dc3545;}
+        #checkItemsTable .item-actions button:hover { background-color: #c82333;}
+
+
+        #apiCashierResponseContainer {
+            position: fixed; bottom: 0; left: 0; right: 0; background-color: #333; color: white;
+            padding: 0; margin: 0; z-index: 1000; border-top: 1px solid #555;
+        }
+        #apiCashierResponse { padding: 8px 15px; font-family: monospace; white-space: pre-wrap; word-wrap: break-word; font-size: 0.9em; }
+        #apiCashierResponse.success { background-color: #28a745; color: white; }
+        #apiCashierResponse.error { background-color: #dc3545; color: white; }
+
+        /* Модальне вікно для вибору товару */
+        .modal {
+            display: none; position: fixed; z-index: 1001; left: 0; top: 0;
+            width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5);
+            align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background-color: #fff; padding: 20px; border-radius: 8px;
+            width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .modal-close-btn {
+            position: absolute; top: 10px; right: 15px; font-size: 24px;
+            font-weight: bold; cursor: pointer; color: #777;
+        }
+        .modal-close-btn:hover { color: #333; }
+        .modal-product-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .modal-product-item:last-child { border-bottom: none; }
+        .modal-product-item:hover { background-color: #f0f0f0; }
+
+        /* Інформація про касира та магазин */
+        .user-store-info { font-size: 0.8em; color: #f0f0f0; text-align: left; padding-left: 20px; margin-top: 5px; }
+
+        @media (max-width: 768px) {
+            .cashier-main-container { flex-direction: column; }
+            header h1 { font-size: 1.2em; }
+            #logoutBtnCashier { top: 10px; right: 10px; padding: 6px 10px; font-size: 0.8em;}
+        }
+
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Інтерфейс Касира</h1>
+        <button id="logoutBtnCashier">Вийти</button>
+        <div class="user-store-info">
+            Касир: <span id="currentCashierName">Завантаження...</span> | 
+            Магазин: <span id="currentStoreName">Завантаження...</span>
+        </div>
+    </header>
+
+    <div class="cashier-main-container">
+        <div class="left-panel">
+            <h2>Пошук товару</h2>
+            <div>
+                <label for="barcodeScanInput">Штрихкод / Назва:</label>
+                <input type="text" id="barcodeScanInput" placeholder="Скануйте або введіть штрихкод/назву">
+            </div>
+            <button id="findProductBtn" style="margin-bottom: 15px;">Знайти / Додати</button>
+            
+            <div id="foundProductsContainer">
+                <!-- Тут будуть відображатися знайдені товари або модальне вікно -->
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <h2>Поточний Чек</h2>
+            <table id="checkItemsTable">
+                <thead>
+                    <tr>
+                        <th>Назва товару</th>
+                        <th>К-сть</th>
+                        <th>Ціна</th>
+                        <th>Сума</th>
+                        <th>Дія</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Рядки товарів будуть додані сюди динамічно -->
+                </tbody>
+            </table>
+            <h3 style="text-align: right; margin-top: 15px;">Загальна сума: <span id="totalAmount">0.00 грн</span></h3>
+            
+            <div style="margin-top: 20px;">
+                <label for="paymentMethodSelect">Метод оплати:</label>
+                <select id="paymentMethodSelect">
+                    <option value="Готівка">Готівка</option>
+                    <option value="Картка">Картка</option>
+                    <option value="Змішана">Змішана</option>
+                </select>
+            </div>
+            <button id="createSaleBtn" style="width: 100%; margin-top: 15px; background-color: #007bff;">Оформити Продаж</button>
+        </div>
+    </div>
+
+    <!-- Модальне вікно для вибору товару, якщо пошук повернув декілька -->
+    <div id="selectProductModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span id="closeSelectProductModalBtn" class="modal-close-btn">×</span>
+            <h2>Оберіть товар:</h2>
+            <div id="modalProductList">
+                <!-- Список товарів для вибору буде тут -->
+            </div>
+        </div>
+    </div>
+
+    <div id="apiCashierResponseContainer">
+        <div id="apiCashierResponse">Статус операцій...</div>
+    </div>
+
+    <script type="module" src="js/cashier_app.js"></script>
+</body>
+</html>
