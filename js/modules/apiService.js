@@ -1,6 +1,6 @@
 // js/modules/apiService.js
 
-const API_BASE_URL = 'http://localhost:3001/api'; // Ваша базова URL API
+const API_BASE_URL = 'https://sokrat-pos-backend.onrender.com/api'; // <--- ВАЖЛИВА ЗМІНА!
 
 async function request(endpoint, method = 'GET', data = null) {
     const url = `${API_BASE_URL}${endpoint}`;
