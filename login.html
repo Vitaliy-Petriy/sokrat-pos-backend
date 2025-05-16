@@ -3,44 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вхід - Sokrat POS</title>
+    <title>Вхід - Kometra v1.0 (Beta)</title>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f4f4; margin: 0; }
-        .login-container { background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        h1 { text-align: center; color: #333; margin-bottom: 25px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
-        input[type="text"], input[type="password"] {
-            width: calc(100% - 22px); padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5; 
         }
-        button {
-            background-color: #007bff; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; width: 100%;
+
+        .login-page-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 12vh; 
+            min-height: calc(100vh - 12vh); 
+            box-sizing: border-box;
         }
-        button:hover { background-color: #0056b3; }
-        .error-message { color: red; text-align: center; margin-bottom: 15px; font-size: 0.9em; }
-        .loading-message { text-align: center; margin-bottom: 15px; font-size: 0.9em; color: #555;}
+
+        .login-wrapper {
+            width: 100%;
+            max-width: 550px; /* Збільшена максимальна ширина для ширшої форми */
+            box-sizing: border-box;
+        }
+
+        .login-container {
+            background-color: #ffffff;
+            padding: 40px 45px; 
+            border-radius: 6px; 
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); 
+            text-align: center; 
+        }
+
+        .login-container h1 {
+            font-size: 2.4em; 
+            color: #2c3e50; 
+            margin-top: 0;
+            margin-bottom: 10px; 
+            font-weight: 500; 
+        }
+        
+        .login-container .app-subtitle {
+            font-size: 1em; 
+            color: #7f8c8d; 
+            margin-bottom: 40px; 
+        }
+
+        .form-group {
+            margin-bottom: 25px; 
+            text-align: left; 
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="password"] {
+            width: 100%; 
+            padding: 18px 20px; 
+            border: 1px solid #dce4ec; 
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 1.15em; 
+            background-color: #fdfdfd; 
+        }
+        .form-group input[type="text"]::placeholder,
+        .form-group input[type="password"]::placeholder {
+            color: #abb7c4; 
+        }
+
+        .form-group input[type="text"]:focus,
+        .form-group input[type="password"]:focus {
+            border-color: #3498db; 
+            box-shadow: 0 0 0 0.15rem rgba(52, 152, 219, 0.25);
+            outline: none;
+        }
+
+        .login-button {
+            background-color: #3498db; 
+            color: white;
+            padding: 18px 25px; 
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2em;  
+            font-weight: 500;
+            width: 100%; 
+            transition: background-color 0.2s ease;
+            margin-top: 15px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px; 
+        }
+
+        .login-button:hover {
+            background-color: #2980b9; 
+        }
+
+        .error-message, .loading-message {
+            color: #e74c3c; 
+            text-align: center;
+            margin-top: 18px; 
+            margin-bottom: 0;
+            font-size: 0.95em; 
+            min-height: 1.3em; 
+        }
+        .loading-message {
+            color: #555;
+        }
+
+        @media (max-width: 600px) { 
+            .login-page-container {
+                padding-top: 8vh; 
+            }
+            .login-wrapper {
+                 max-width: 90%; 
+            }
+            .login-container {
+                padding: 30px 25px; 
+            }
+            .login-container h1 {
+                font-size: 2em; 
+            }
+             .login-container .app-subtitle {
+                margin-bottom: 30px; 
+            }
+            .form-group input[type="text"],
+            .form-group input[type="password"] {
+                padding: 15px 18px; 
+                font-size: 1.1em;    
+            }
+            .login-button {
+                padding: 15px 20px; 
+                font-size: 1.1em;   
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <h1>Sokrat POS</h1>
-        <form id="loginForm">
-            <div>
-                <label for="username">Логін:</label>
-                <input type="text" id="username" name="username" required>
+    <div class="login-page-container">
+        <div class="login-wrapper"> 
+            <div class="login-container">
+                <h1>Kometra v1.0 (Beta)</h1>
+                <p class="app-subtitle">Система управління торгівлею</p>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <input type="text" id="username" name="username" required placeholder="Логін">
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="password" name="password" required placeholder="Пароль">
+                    </div>
+                    <div id="errorMessage" class="error-message" style="display:none;"></div>
+                    <div id="loadingMessage" class="loading-message" style="display:none;">Обробка...</div>
+                    <button type="submit" class="login-button">Увійти</button>
+                </form>
             </div>
-            <div>
-                <label for="password">Пароль:</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <div id="errorMessage" class="error-message" style="display:none;"></div>
-            <div id="loadingMessage" class="loading-message" style="display:none;">Обробка...</div>
-            <button type="submit">Увійти</button>
-        </form>
+        </div>
     </div>
 
     <script>
-        // Простий обробник для форми входу
         const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
         const errorMessageDiv = document.getElementById('errorMessage');
         const loadingMessageDiv = document.getElementById('loadingMessage');
 
@@ -49,12 +169,14 @@
             errorMessageDiv.style.display = 'none';
             errorMessageDiv.textContent = '';
             loadingMessageDiv.style.display = 'block';
+            const submitButton = loginForm.querySelector('.login-button');
+            if(submitButton) submitButton.disabled = true;
 
-            const username = event.target.username.value;
+            const username = usernameInput.value;
             const password = event.target.password.value;
 
             try {
-                const response = await fetch('/api/auth/login', { // Маршрут для логіну
+                const response = await fetch('/api/auth/login', { // Переконайтесь, що URL правильний для вашого API
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -64,39 +186,41 @@
 
                 const data = await response.json();
                 loadingMessageDiv.style.display = 'none';
+                if(submitButton) submitButton.disabled = false;
 
                 if (!response.ok) {
                     throw new Error(data.error || `Помилка ${response.status}`);
                 }
 
-                // Зберігаємо токен (наприклад, в localStorage)
                 localStorage.setItem('authToken', data.token);
-                localStorage.setItem('userRole', data.role); // Зберігаємо роль для зручності
+                localStorage.setItem('userRole', data.role);
                 localStorage.setItem('username', data.username);
                 localStorage.setItem('userId', data.userId);
-                localStorage.setItem('storeId', data.storeId); // Якщо є і потрібно на фронтенді
+                if (data.storeId !== undefined && data.storeId !== null) {
+                    localStorage.setItem('storeId', data.storeId);
+                } else {
+                    localStorage.removeItem('storeId');
+                }
 
-                // Перенаправлення залежно від ролі
                 if (data.role === 'admin' || data.role === 'manager') {
-                    window.location.href = '/new_admin.html'; // Шлях до адмін-панелі
+                    window.location.href = '/new_admin.html';
                 } else if (data.role === 'cashier') {
-                    window.location.href = '/cashier.html'; // Шлях до інтерфейсу касира
+                    window.location.href = '/cashier.html';
                 } else {
                     errorMessageDiv.textContent = 'Невідома роль користувача.';
                     errorMessageDiv.style.display = 'block';
-                    localStorage.clear(); // Очищаємо, якщо роль не визначена
+                    localStorage.clear();
                 }
 
             } catch (error) {
                 loadingMessageDiv.style.display = 'none';
-                errorMessageDiv.textContent = `Помилка входу: ${error.message}`;
+                if(submitButton) submitButton.disabled = false;
+                errorMessageDiv.textContent = `${error.message}`;
                 errorMessageDiv.style.display = 'block';
                 console.error('Login error:', error);
             }
         });
 
-        // Перевірка, чи користувач вже залогінений, при завантаженні сторінки
-        // Якщо так, і ми на login.html, то перенаправляємо одразу
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('authToken');
             const role = localStorage.getItem('userRole');
@@ -106,6 +230,8 @@
                 } else if (role === 'cashier') {
                     window.location.href = '/cashier.html';
                 }
+            } else {
+                if (usernameInput) usernameInput.focus();
             }
         });
     </script>

@@ -1,0 +1,113 @@
+<!-- partials/products.html -->
+<h2>Номенклатура (Товари)</h2>
+<div class="product-subtabs" style="margin-bottom: 20px;">
+    <button class="product-subtab-button active" data-product-subtab="productListSubTab">Список товарів</button>
+    <button class="product-subtab-button" data-product-subtab="productImportExportSubTab">Імпорт / Експорт</button>
+</div>
+
+<div id="productListSubTab" class="product-subtab-content active">
+    <div class="container" style="padding-top:0; box-shadow: none;">
+        <button type="button" id="addNewProductBtn" style="margin-bottom: 20px;">+ Додати новий товар</button>
+        <h3>Список Товарів:</h3>
+        <table id="productsTable">
+            <thead>
+    <tr>
+        <th>ID</th>
+        <th>Назва</th>
+        <th>Ціна</th> <!-- "Осн. ШК" видалено -->
+        <th>Од.</th>
+        <th>Заг. залишок</th> <!-- "Дод. ШК (к-сть)" видалено, "Заг. залишок" залишається -->
+        <th style="width: 80px;">Дії</th>
+    </tr>
+</thead>
+            <tbody>
+                <!-- Рядки товарів будуть завантажені сюди JavaScript-ом -->
+            </tbody>
+        </table>
+
+        <div id="productsPaginationContainer" style="margin-top: 20px; text-align: center; padding: 10px 0;">
+            <!-- Кнопки та інформація про сторінки будуть додані сюди JavaScript-ом -->
+        </div>
+
+    </div> <!-- Закриття div.container всередині productListSubTab -->
+</div> <!-- Закриття productListSubTab -->
+
+<div id="productImportExportSubTab" class="product-subtab-content">
+    <div class="container" style="padding-top:0; box-shadow: none;">
+        <h3>Експорт даних</h3>
+        <button type="button" id="exportProductsBtn" style="margin-bottom: 10px;" class="secondary-btn">Експорт Товарів (Excel)</button>
+        <button type="button" id="exportBarcodesBtn" style="margin-bottom: 20px; margin-left: 10px;" class="secondary-btn">Експорт Штрихкодів (Excel)</button>
+        <hr>
+        <h3>Імпорт даних</h3>
+        <div style="margin-bottom: 15px;">
+            <label for="importProductsFile">Імпорт Товарів (з Excel):</label>
+            <input type="file" id="importProductsFile" accept=".xlsx, .xls" style="display: block; margin-bottom: 5px;">
+            <button type="button" id="processImportProductsBtn">Завантажити та обробити товари</button>
+            <p style="font-size: 0.8em; color: #666;">Файл має мати колонки: 'ID' (для оновлення, опціонально), 'Назва Товару', 'Основний ШК', 'Роздрібна Ціна', 'Одиниця Виміру'.</p>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label for="importBarcodesFile">Імпорт Штрихкодів (з Excel):</label>
+            <input type="file" id="importBarcodesFile" accept=".xlsx, .xls" style="display: block; margin-bottom: 5px;">
+            <button type="button" id="processImportBarcodesBtn">Завантажити та обробити штрихкоди</button>
+            <p style="font-size: 0.8em; color: #666;">Файл має мати колонки: 'ID Товару', 'Значення Штрихкоду', 'Опис Штрихкоду' (опціонально).</p>
+        </div>
+    </div>
+</div>
+
+<div id="productModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;"> <!-- Можна збільшити ширину модалки -->
+        <span id="closeProductModalBtn" class="modal-close-btn">×</span>
+        <div class="modal-header"><h2 id="productModalTitle">Додати Товар</h2></div>
+        
+        <div class="modal-tabs">
+            <button class="modal-tab-button active" data-modal-tab="productMainInfoTab">Основне</button>
+            <button class="modal-tab-button" data-modal-tab="productBarcodesTab">Штрихкоди</button>
+            <button class="modal-tab-button" data-modal-tab="productStockTab">Залишки</button> <!-- НОВА КНОПКА ВКЛАДКИ -->
+        </div>
+        
+        <form id="productModalForm">
+            <input type="hidden" id="modalProductId">
+            
+            <div id="productMainInfoTab" class="modal-tab-content active">
+                <div><label for="modalProductName">Назва товару:</label><input type="text" id="modalProductName" required></div>
+                <div><label for="modalProductRetailPrice">Роздрібна ціна (грн):</label><input type="number" id="modalProductRetailPrice" step="0.01" required></div>
+                <div><label for="modalProductUnit">Одиниця виміру:</label><input type="text" id="modalProductUnit" value="шт"></div>
+                <div><label for="modalMainProductBarcode">Основний/Інформаційний Штрихкод:</label><input type="text" id="modalMainProductBarcode"></div>
+            </div>
+            
+            <div id="productBarcodesTab" class="modal-tab-content">
+                <h4>Додаткові штрихкоди:</h4>
+                <div id="modalAdditionalBarcodesContainer"></div>
+                <button type="button" id="modalAddAdditionalBarcodeBtn" style="margin-top: 5px; margin-bottom:15px;">+ Додати штрихкод</button>
+            </div>
+
+            <!-- НОВИЙ БЛОК ДЛЯ ВКЛАДКИ "ЗАЛИШКИ" -->
+            <div id="productStockTab" class="modal-tab-content">
+                <h4>Залишки товару по магазинах (партії з позитивним залишком):</h4>
+                <div style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; margin-bottom: 10px;">
+                    <table id="productStockTable" style="width: 100%; margin-top: 0;"> <!-- margin-top: 0 для таблиці всередині -->
+                        <thead>
+                            <tr>
+                                <th>Магазин (ID)</th>
+                                <th>Дата партії</th>
+                                <th>Поч. к-сть</th>
+                                <th>Залишок</th>
+                                <th>Ціна закуп.</th>
+                                <th>ID Партії</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productStockTableBody">
+                            <!-- Рядки з залишками будуть додані сюди JavaScript-ом -->
+                        </tbody>
+                    </table>
+                </div>
+                <p id="noStockDataMessage" style="display: none; text-align: center; margin-top: 15px;">Для цього товару немає даних про залишки на складах.</p>
+            </div>
+            <!-- КІНЕЦЬ НОВОГО БЛОКУ ДЛЯ ВКЛАДКИ "ЗАЛИШКИ" -->
+
+            <hr style="margin-top: 20px;">
+            <button type="submit">Зберегти</button>
+            <button type="button" id="cancelProductModalBtn" class="secondary-btn">Скасувати</button>
+        </form>
+    </div>
+</div>

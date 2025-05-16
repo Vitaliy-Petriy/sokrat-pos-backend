@@ -1,0 +1,137 @@
+<!-- partials/purchases.html -->
+<h2>Документи Закупівлі (Приходу)</h2>
+
+<div class="container" style="box-shadow: none; padding-top: 0;">
+    <button type="button" id="addNewPurchaseDocBtn" style="margin-bottom: 20px;">+ Створити новий документ закупівлі</button>
+    <h3>Список Документів Закупівлі:</h3>
+    <table id="purchasesTable">
+        <thead>
+            <tr>
+                <th>ID Док.</th>
+                <th>Дата</th>
+                <th>Магазин</th>
+                <th>Номер накл.</th>
+                <th>Сума</th>
+                <th>Дії</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Рядки документів закупівлі будуть завантажені сюди -->
+        </tbody>
+    </table>
+</div>
+
+<!-- Модальне вікно для Документа Закупівлі -->
+<div id="purchaseModal" class="modal">
+    <div class="modal-content" style="max-width: 850px;">
+        <span id="closePurchaseModalBtn" class="modal-close-btn">×</span>
+        <div class="modal-header">
+            <h2 id="purchaseModalTitle">Створити Документ Закупівлі</h2>
+        </div>
+        <form id="purchaseModalForm">
+            <input type="hidden" id="modalPurchaseDocId"> <!-- Для ID документа (при редагуванні/перегляді) -->
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 15px;">
+                <div style="flex: 1; min-width: 200px;">
+                    <label for="modalPurchaseStoreId">Магазин (куди прихід):</label>
+                    <select id="modalPurchaseStoreId" required></select>
+                </div>
+                <div style="flex: 1; min-width: 180px;">
+                    <label for="modalPurchaseDate">Дата документа:</label>
+                    <input type="date" id="modalPurchaseDate" required>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <label for="modalPurchaseDocNumber">Номер вхідної накладної (опц.):</label>
+                    <input type="text" id="modalPurchaseDocNumber">
+                </div>
+            </div>
+            
+            <hr style="margin: 20px 0;">
+            
+            <!-- Блок додавання товару до документа -->
+            <div class="add-item-form-section" 
+                 style="background-color: #e9ecef; /* Світліший фон для виділення */
+                        border: 1px solid #adb5bd; /* Більш помітна рамка */
+                        padding: 20px; 
+                        margin-top: 15px; 
+                        margin-bottom: 25px; 
+                        border-radius: 6px;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.05); /* Невелика тінь */
+                        ">
+                <h4 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #ced4da; padding-bottom: 10px; font-size: 1.2em; color: #343a40;">
+                    Додати позицію в документ
+                </h4>
+                
+                <div style="margin-bottom: 10px;"> 
+                    <label for="modalPurchaseProductSearchInput" style="font-weight: 500; display: block; margin-bottom: 5px;">1. Пошук товару (назва, ШК):</label>
+                    <div style="position: relative;"> 
+                        <input type="text" id="modalPurchaseProductSearchInput" 
+                               placeholder="Почніть вводити текст для пошуку..." 
+                               style="margin-bottom: 0; border: 1px solid #007bff; /* Акцентна рамка для поля пошуку */">
+                        <div id="modalPurchaseProductSearchResults" 
+                             style="position: absolute; top: calc(100% + 1px); left: 0; right: 0; 
+                                    background-color: #ffffff; 
+                                    border: 1px solid #007bff; /* Акцентна рамка для результатів */
+                                    border-top: none; /* Прибираємо верхню рамку, якщо збігається з нижньою рамкою інпута */
+                                    z-index: 1050; /* Вищий z-index, щоб бути поверх інших елементів модалки */
+                                    max-height: 220px; /* Трохи більше висоти */
+                                    overflow-y: auto; 
+                                    display: none; 
+                                    box-shadow: 0 5px 10px rgba(0,0,0,0.15); /* Більш помітна тінь */
+                                    border-radius: 0 0 4px 4px; /* Заокруглення знизу */
+                                    ">
+                            {/* Результати пошуку */}
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 15px; margin-bottom:15px;">
+                    <label for="modalPurchaseSelectedProductName" style="font-weight: 500; display: block; margin-bottom: 5px;">2. Обраний товар:</label>
+                    <input type="text" id="modalPurchaseSelectedProductName" readonly placeholder="Товар не обрано" 
+                           style="background-color: #f8f9fa; color: #495057; border: 1px dashed #ced4da; cursor: default; font-weight: bold;">
+                    <input type="hidden" id="modalPurchaseSelectedProductId">
+                </div>
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; border-top: 1px dashed #ced4da; padding-top: 15px; margin-top:15px;">
+                    <div style="flex: 1; min-width: 120px;">
+                         <label for="modalPurchaseProductQtyInput">Кількість:</label>
+                         <input type="number" id="modalPurchaseProductQtyInput" step="0.001" value="1" min="0.001">
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                         <label for="modalPurchaseProductPriceInput">Ціна закуп. (за од.):</label>
+                         <input type="number" id="modalPurchaseProductPriceInput" step="0.01" placeholder="0.00" min="0">
+                    </div>
+                    <button type="button" id="addProductToPurchaseModalBtn" class="button" 
+                            style="padding-top: 10px; padding-bottom: 10px; white-space: nowrap; flex-shrink:0; background-color: #28a745; /* Зелена кнопка */">
+                        Додати в документ
+                    </button>
+                </div>
+            </div>
+            <!-- Кінець блоку додавання товару -->
+
+            <h3 style="margin-top: 25px;">Позиції в документі:</h3>
+            <div style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; margin-bottom: 10px;">
+                <table id="modalPurchaseItemsTable" style="width: 100%; margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th style="width:40%">Назва Товару (ID)</th>
+                            <th style="width:15%">К-сть</th>
+                            <th style="width:20%">Ціна закуп.</th>
+                            <th style="width:20%">Сума</th>
+                            <th style="width:5%">Дія</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalPurchaseItemsTableBody">
+                        <!-- Рядки товарів будуть додаватися сюди JavaScript-ом -->
+                    </tbody>
+                </table>
+            </div>
+            <h4 style="text-align: right; margin-top: 10px;">Загальна сума по документу: <span id="modalPurchaseTotalAmount">0.00</span> грн</h4>
+
+            <hr style="margin-top: 25px; margin-bottom: 15px;">
+            <button type="submit">Зберегти Документ</button>
+            <button type="button" id="cancelPurchaseModalBtn" class="secondary-btn">Скасувати</button>
+        </form>
+    </div>
+</div>
+<!-- Кінець модального вікна -->

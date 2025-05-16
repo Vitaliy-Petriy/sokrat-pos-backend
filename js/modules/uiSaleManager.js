@@ -2,12 +2,12 @@
 import { 
     createSaleAPI, fetchSalesAPI, fetchSaleByIdAPI, 
     fetchStoresAPI, fetchUsersAPI, 
-    getProductByIdAPI, findProductsByBarcodeAPI // Для пошуку товарів
+    getProductByIdAPI, findProductsByBarcodeAPI 
 } from './apiService.js';
 
 let salesTableBody, apiResponseDiv;
 
-// Нові змінні для модального вікна
+// Елементи модального вікна
 let addNewSaleBtn, saleModal, saleModalTitle, closeSaleModalBtn, cancelSaleModalBtn,
     saleModalForm, modalSaleIdInput, modalSaleStoreIdSelect, modalSaleUserIdSelect,
     modalSalePaymentMethodSelect, modalSaleOverallDiscountInput,
@@ -16,10 +16,8 @@ let addNewSaleBtn, saleModal, saleModalTitle, closeSaleModalBtn, cancelSaleModal
     addProductToSaleModalBtn,
     modalSaleTotalUnroundedSpan, modalSaleTotalWithDiscountSpan, modalSaleTotalRoundedSpan;
 
-// Масив для зберігання товарів у поточному чеку в модалці
 let currentSaleModalItems = [];
 
-// Допоміжна функція округлення (можна винести в utils.js, якщо використовується в багатьох місцях)
 function roundToNearest50Kop(amount) {
   if (typeof amount !== 'number' || isNaN(amount)) return 0;
   return Math.round(amount * 2) / 2;
@@ -35,7 +33,7 @@ export function initSaleControls(responseDivElement) {
     closeSaleModalBtn = document.getElementById('closeSaleModalBtn');
     cancelSaleModalBtn = document.getElementById('cancelSaleModalBtn');
     saleModalForm = document.getElementById('saleModalForm');
-    modalSaleIdInput = document.getElementById('modalSaleId'); // Поки не використовується для створення
+    modalSaleIdInput = document.getElementById('modalSaleId');
     modalSaleStoreIdSelect = document.getElementById('modalSaleStoreId');
     modalSaleUserIdSelect = document.getElementById('modalSaleUserId');
     modalSalePaymentMethodSelect = document.getElementById('modalSalePaymentMethod');
@@ -65,11 +63,9 @@ export function initSaleControls(responseDivElement) {
     if (addProductToSaleModalBtn) {
         addProductToSaleModalBtn.addEventListener('click', handleAddProductToSaleModalTable);
     }
-     // Обробник для зміни загальної знижки на чек для перерахунку
     if (modalSaleOverallDiscountInput) {
         modalSaleOverallDiscountInput.addEventListener('input', updateSaleModalTotals);
     }
-
 
     if (saleModal) {
         saleModal.addEventListener('click', (event) => {
@@ -79,12 +75,11 @@ export function initSaleControls(responseDivElement) {
         });
     }
     
-    populateSelectsForSaleModal(); // Заповнюємо магазини та користувачів у модалці
-    setupSalesTableEventListeners(); // Для кнопки "Деталі" у списку чеків
+    populateSelectsForSaleModal(); 
+    setupSalesTableEventListeners();
 }
 
 async function populateSelectsForSaleModal() {
-    // Заповнення магазинів
     if (modalSaleStoreIdSelect) {
         try {
             const stores = await fetchStoresAPI();
@@ -97,7 +92,6 @@ async function populateSelectsForSaleModal() {
             });
         } catch (error) { console.error("Помилка завантаження магазинів для модалки продажів:", error); }
     }
-    // Заповнення користувачів (касирів)
     if (modalSaleUserIdSelect) {
         try {
             const users = await fetchUsersAPI();
@@ -110,69 +104,147 @@ async function populateSelectsForSaleModal() {
                     modalSaleUserIdSelect.appendChild(option);
                 }
             });
-             // Автоматично вибрати поточного залогіненого користувача, якщо він є у списку
             const currentUserId = localStorage.getItem('userId');
             if (currentUserId && modalSaleUserIdSelect.querySelector(`option[value="${currentUserId}"]`)) {
                 modalSaleUserIdSelect.value = currentUserId;
             }
-
         } catch (error) { console.error("Помилка завантаження користувачів для модалки продажів:", error); }
     }
 }
 
+function setSaleFormReadOnly(isReadOnly) {
+    if (modalSaleStoreIdSelect) modalSaleStoreIdSelect.disabled = isReadOnly;
+    if (modalSaleUserIdSelect) modalSaleUserIdSelect.disabled = isReadOnly;
+    if (modalSalePaymentMethodSelect) modalSalePaymentMethodSelect.disabled = isReadOnly;
+    if (modalSaleOverallDiscountInput) modalSaleOverallDiscountInput.readOnly = isReadOnly;
+
+    const addProductSection = modalSaleProductIdInput?.closest('div[style*="display: flex"]');
+    if (addProductSection) addProductSection.style.display = isReadOnly ? 'none' : 'flex';
+    
+    const submitButton = saleModalForm?.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.style.display = isReadOnly ? 'none' : 'inline-block';
+
+    modalSaleItemsTableBody.querySelectorAll('input').forEach(input => {
+        input.readOnly = isReadOnly;
+    });
+    modalSaleItemsTableBody.querySelectorAll('.remove-modal-sale-item-btn').forEach(button => {
+        button.style.display = isReadOnly ? 'none' : 'inline-block';
+    });
+}
+
+async function openSaleModalForView(saleId) {
+    if (!saleModal || !saleModalForm || !modalSaleItemsTableBody || !modalSaleTotalRoundedSpan) {
+        console.error("Елементи модального вікна продажу не ініціалізовані для перегляду."); return;
+    }
+    
+    try {
+        if (apiResponseDiv) apiResponseDiv.textContent = `Завантаження деталей чека ID: ${saleId}...`;
+        const saleDoc = await fetchSaleByIdAPI(saleId);
+        if (!saleDoc) {
+            if (apiResponseDiv) apiResponseDiv.textContent = `Не вдалося завантажити чек ID: ${saleId}.`;
+            alert(`Не вдалося завантажити чек ID: ${saleId}.`);
+            return;
+        }
+
+        saleModalTitle.textContent = `Деталі Чека № ${escapeHTML(saleDoc.check_number_display)} (ID: ${saleDoc.id})`;
+        saleModalForm.reset(); 
+        modalSaleIdInput.value = saleDoc.id; // Зберігаємо ID чеку
+
+        // Заповнення шапки
+        await populateSelectsForSaleModal(); // Перезаповнюємо та вибираємо
+        modalSaleStoreIdSelect.value = saleDoc.store_id;
+        modalSaleUserIdSelect.value = saleDoc.user_id;
+        modalSalePaymentMethodSelect.value = saleDoc.payment_method;
+        modalSaleOverallDiscountInput.value = saleDoc.overall_discount_percent || 0;
+
+        // Заповнення товарів
+        currentSaleModalItems = saleDoc.items.map(item => ({
+            product_id: item.product_id,
+            product_name: item.product_name,
+            quantity: parseFloat(item.quantity),
+            price_per_unit_sold: parseFloat(item.price_per_unit_sold),
+            discount_percent: parseFloat(item.discount_percent) || 0,
+            // Собівартість тут не редагується, лише для інформації, якщо потрібно буде відобразити
+            cost_of_goods_sold_fifo: parseFloat(item.cost_of_goods_sold_fifo) 
+        }));
+        
+        setSaleFormReadOnly(true); // Режим "тільки для читання"
+        renderSaleModalItems();    // Відображаємо товари (врахує readOnly)
+        
+        saleModal.style.display = 'block';
+        if (apiResponseDiv) apiResponseDiv.textContent = `Відображено деталі чека ID: ${saleDoc.id}.`;
+
+    } catch (error) {
+        console.error(`Помилка відкриття деталей чека ID ${saleId}:`, error);
+        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка: ${error.message}`;
+        alert(`Помилка завантаження деталей чека: ${error.message}`);
+    }
+}
+
 function openSaleModalForCreate() {
-    // Перевірка наявності ключових елементів модалки
     if (!saleModal || !saleModalForm || !modalSaleItemsTableBody || !modalSaleTotalRoundedSpan) {
          console.error("Елементи модального вікна продажу не ініціалізовані для створення."); return;
     }
     saleModalTitle.textContent = 'Створити Новий Чек';
     saleModalForm.reset();
+    modalSaleIdInput.value = ''; // Немає ID для нового чеку
     currentSaleModalItems = [];
-    renderSaleModalItems(); // Очистить і оновить таблицю товарів
-    // updateSaleModalTotals(); // renderSaleModalItems вже викликає це
     
-    // Встановлення значень за замовчуванням (наприклад, поточний користувач)
+    setSaleFormReadOnly(false); // Режим редагування/створення
+    renderSaleModalItems();
+    
     const currentUserId = localStorage.getItem('userId');
     if (currentUserId && modalSaleUserIdSelect.querySelector(`option[value="${currentUserId}"]`)) {
         modalSaleUserIdSelect.value = currentUserId;
     }
-    // Можна також встановлювати магазин за замовчуванням, якщо є така логіка
+    const defaultStoreId = localStorage.getItem('storeId'); // Можна спробувати встановити магазин за замовчуванням
+    if (defaultStoreId && modalSaleStoreIdSelect.querySelector(`option[value="${defaultStoreId}"]`)) {
+        modalSaleStoreIdSelect.value = defaultStoreId;
+    }
+
 
     saleModal.style.display = 'block';
+    if (apiResponseDiv) apiResponseDiv.textContent = "Форма для створення нового чеку готова.";
 }
 
 function closeSaleModal() {
     if(saleModal) saleModal.style.display = 'none';
+    currentSaleModalItems = [];
+    if (apiResponseDiv) apiResponseDiv.textContent = "Модальне вікно продажу закрито.";
 }
 
-// Візуалізація товарів у таблиці модального вікна продажу
 function renderSaleModalItems() {
     if (!modalSaleItemsTableBody) return;
+    const isReadOnly = modalSaleStoreIdSelect?.disabled || false; // Визначаємо режим форми
+
     modalSaleItemsTableBody.innerHTML = '';
     currentSaleModalItems.forEach((item, index) => {
         const row = modalSaleItemsTableBody.insertRow();
         const lineSubtotal = (parseFloat(item.quantity) * parseFloat(item.price_per_unit_sold) * (1 - (parseFloat(item.discount_percent) / 100))).toFixed(2);
+        const costFifoDisplay = item.cost_of_goods_sold_fifo ? parseFloat(item.cost_of_goods_sold_fifo).toFixed(2) : '---';
+
         row.innerHTML = `
             <td>${escapeHTML(item.product_name)} (ID: ${item.product_id})</td>
-            <td><input type="number" value="${item.quantity}" min="0.001" step="0.001" class="modal-sale-item-quantity" data-index="${index}"></td>
-            <td><input type="number" value="${parseFloat(item.price_per_unit_sold).toFixed(2)}" min="0.00" step="0.01" class="modal-sale-item-price" data-index="${index}"></td>
-            <td><input type="number" value="${parseFloat(item.discount_percent).toFixed(1)}" min="0" max="100" step="0.1" class="modal-sale-item-discount" data-index="${index}"></td>
+            <td><input type="number" value="${item.quantity}" min="0.001" step="0.001" class="modal-sale-item-quantity" data-index="${index}" ${isReadOnly ? 'readonly' : ''}></td>
+            <td><input type="number" value="${parseFloat(item.price_per_unit_sold).toFixed(2)}" min="0.00" step="0.01" class="modal-sale-item-price" data-index="${index}" ${isReadOnly ? 'readonly' : ''}></td>
+            <td><input type="number" value="${parseFloat(item.discount_percent).toFixed(1)}" min="0" max="100" step="0.1" class="modal-sale-item-discount" data-index="${index}" ${isReadOnly ? 'readonly' : ''}></td>
             <td>${lineSubtotal}</td>
-            <td>---</td> <!-- Собівартість буде на бекенді -->
-            <td><button type="button" class="delete-btn remove-modal-sale-item-btn" data-index="${index}">X</button></td>
+            <td>${costFifoDisplay}</td>
+            <td><button type="button" class="delete-btn remove-modal-sale-item-btn" data-index="${index}" style="display: ${isReadOnly ? 'none' : 'inline-block'};">X</button></td>
         `;
     });
 
-    modalSaleItemsTableBody.querySelectorAll('.modal-sale-item-quantity, .modal-sale-item-price, .modal-sale-item-discount').forEach(input => {
-        input.addEventListener('change', handleModalSaleItemChange);
-    });
-    modalSaleItemsTableBody.querySelectorAll('.remove-modal-sale-item-btn').forEach(button => {
-        button.addEventListener('click', handleRemoveModalSaleItem);
-    });
+    if (!isReadOnly) {
+        modalSaleItemsTableBody.querySelectorAll('.modal-sale-item-quantity, .modal-sale-item-price, .modal-sale-item-discount').forEach(input => {
+            input.addEventListener('change', handleModalSaleItemChange);
+        });
+        modalSaleItemsTableBody.querySelectorAll('.remove-modal-sale-item-btn').forEach(button => {
+            button.addEventListener('click', handleRemoveModalSaleItem);
+        });
+    }
     updateSaleModalTotals();
 }
 
-// Обробник зміни кількості, ціни або знижки товару в модалці продажу
 function handleModalSaleItemChange(event) {
     const index = parseInt(event.target.dataset.index);
     const itemToUpdate = currentSaleModalItems[index];
@@ -194,111 +266,94 @@ function handleModalSaleItemChange(event) {
     renderSaleModalItems();
 }
 
-// Обробник видалення товару з таблиці в модалці продажу
 function handleRemoveModalSaleItem(event) {
     const index = parseInt(event.target.dataset.index);
     currentSaleModalItems.splice(index, 1);
     renderSaleModalItems();
 }
 
-// Оновлення всіх сум у модальному вікні продажу
 function updateSaleModalTotals() {
     if (!modalSaleTotalUnroundedSpan || !modalSaleTotalWithDiscountSpan || !modalSaleTotalRoundedSpan || !modalSaleOverallDiscountInput) return;
-
     let totalUnrounded = 0;
     let totalWithItemDiscounts = 0;
-
     currentSaleModalItems.forEach(item => {
         const itemPrice = parseFloat(item.price_per_unit_sold);
         const itemQuantity = parseFloat(item.quantity);
         const itemDiscount = parseFloat(item.discount_percent) / 100;
-
         totalUnrounded += itemPrice * itemQuantity;
         totalWithItemDiscounts += (itemPrice * (1 - itemDiscount)) * itemQuantity;
     });
-
     modalSaleTotalUnroundedSpan.textContent = totalUnrounded.toFixed(2);
-    
     const overallDiscountPercent = parseFloat(modalSaleOverallDiscountInput.value) / 100 || 0;
     const totalAfterOverallDiscount = totalWithItemDiscounts * (1 - overallDiscountPercent);
-    
     modalSaleTotalWithDiscountSpan.textContent = totalAfterOverallDiscount.toFixed(2);
     modalSaleTotalRoundedSpan.textContent = roundToNearest50Kop(totalAfterOverallDiscount).toFixed(2);
 }
 
-// Обробник додавання товару до чеку в модалці (поки що спрощений пошук)
 async function handleAddProductToSaleModalTable() {
+    // ... (код залишається таким же, як у вашій попередній версії) ...
     if (!modalSaleProductIdInput || !modalSaleProductQtyInput || !modalSaleProductPriceInput || !modalSaleProductDiscountInput) return;
-
     const searchTerm = modalSaleProductIdInput.value.trim();
     const quantity = parseFloat(modalSaleProductQtyInput.value);
-    let price = parseFloat(modalSaleProductPriceInput.value); // Може бути порожнім, тоді беремо з товару
+    let price = parseFloat(modalSaleProductPriceInput.value);
     let discount = parseFloat(modalSaleProductDiscountInput.value) || 0;
 
     if (!searchTerm) { alert("Введіть ID, штрихкод або назву товару."); return; }
     if (isNaN(quantity) || quantity <= 0) { alert("Вкажіть коректну кількість."); return; }
 
-    let foundProduct = null;
+    let foundProductData = null;
     try {
-        // Спробуємо знайти за штрихкодом
         const productsByBarcode = await findProductsByBarcodeAPI(searchTerm);
         if (productsByBarcode && productsByBarcode.length > 0) {
-            // Тут потрібна логіка вибору, якщо знайдено декілька. Поки беремо перший.
-            // Або відкриваємо модалку вибору, як в uiCashierManager
-            foundProduct = productsByBarcode[0]; // УВАГА: findProductsByBarcodeAPI повертає масив з розширеними даними
-                                                // нам потрібен product.id, product.name, product.retail_price
-            foundProduct = { // Приводимо до формату, схожого на getProductByIdAPI
-                id: foundProduct.id,
-                name: foundProduct.name,
-                retail_price: foundProduct.retail_price 
-            };
-
+            if (productsByBarcode.length === 1) {
+                foundProductData = productsByBarcode[0];
+            } else {
+                // Тут можна реалізувати модалку вибору, якщо знайдено декілька за ШК
+                alert(`Знайдено декілька товарів за штрихкодом "${searchTerm}". Оберіть один (поки не реалізовано).`);
+                return;
+            }
         }
     } catch (error) {
-        // Якщо не знайдено за ШК, або сталася помилка, спробуємо за ID
-        if (error.message.toLowerCase().includes('не знайдено') || error.status === 404) {
-            if (!isNaN(parseInt(searchTerm))) { // Перевіряємо, чи searchTerm схожий на ID
-                try {
-                    foundProduct = await getProductByIdAPI(searchTerm);
-                } catch (idError) {
-                    alert(`Товар з ID або штрихкодом "${searchTerm}" не знайдено. ${idError.message}`);
-                    return;
-                }
-            } else {
-                 alert(`Товар зі штрихкодом "${searchTerm}" не знайдено.`);
-                 return;
-            }
-        } else {
-            alert(`Помилка пошуку товару: ${error.message}`);
-            return;
+        if (!error.message.toLowerCase().includes('не знайдено') && error.status !== 404) {
+             console.warn(`Помилка пошуку за ШК "${searchTerm}": ${error.message}. Спроба пошуку за ID.`);
         }
     }
-     if (!foundProduct) {
-        alert(`Товар з ID або штрихкодом "${searchTerm}" не знайдено.`);
-        return;
+
+    if (!foundProductData && !isNaN(parseInt(searchTerm))) {
+        try {
+            const productById = await getProductByIdAPI(searchTerm);
+            if (productById) {
+                 foundProductData = { // Приводимо до спільного формату
+                    id: productById.id,
+                    name: productById.name,
+                    retail_price: productById.retail_price
+                };
+            }
+        } catch (idError) { /* ігноруємо, якщо за ID не знайдено */ }
+    }
+    
+    if (!foundProductData) {
+        alert(`Товар з ID або штрихкодом "${searchTerm}" не знайдено.`); return;
     }
 
-    // Якщо ціна не введена користувачем, беремо роздрібну ціну товару
     if (isNaN(price) || modalSaleProductPriceInput.value.trim() === '') {
-        price = parseFloat(foundProduct.retail_price);
+        price = parseFloat(foundProductData.retail_price);
     }
 
-    const existingItemIndex = currentSaleModalItems.findIndex(item => item.product_id === foundProduct.id);
+    const existingItemIndex = currentSaleModalItems.findIndex(item => item.product_id === foundProductData.id);
     if (existingItemIndex !== -1) {
-        // Товар вже є, оновлюємо кількість, ціну, знижку
-        currentSaleModalItems[existingItemIndex].quantity += quantity; // Або замінюємо: = quantity;
-        currentSaleModalItems[existingItemIndex].price_per_unit_sold = price;
+        currentSaleModalItems[existingItemIndex].quantity += quantity;
+        currentSaleModalItems[existingItemIndex].price_per_unit_sold = price; // Можна оновлювати ціну і знижку
         currentSaleModalItems[existingItemIndex].discount_percent = discount;
     } else {
         currentSaleModalItems.push({
-            product_id: foundProduct.id,
-            product_name: foundProduct.name,
+            product_id: foundProductData.id,
+            product_name: foundProductData.name,
             quantity: quantity,
             price_per_unit_sold: price,
             discount_percent: discount
         });
     }
-
     renderSaleModalItems();
     modalSaleProductIdInput.value = '';
     modalSaleProductQtyInput.value = '1';
@@ -309,10 +364,13 @@ async function handleAddProductToSaleModalTable() {
 
 async function handleSaleModalSubmit(event) {
     event.preventDefault();
-    if (currentSaleModalItems.length === 0) {
-        alert('Додайте хоча б один товар у чек!'); return;
+    const saleDocId = modalSaleIdInput.value;
+    if (saleDocId) { // Якщо є ID, це режим перегляду, не зберігаємо
+        alert("Форма відкрита в режимі перегляду. Збереження неможливе.");
+        return;
     }
 
+    if (currentSaleModalItems.length === 0) { alert('Додайте хоча б один товар у чек!'); return; }
     const saleData = {
         store_id: parseInt(modalSaleStoreIdSelect.value),
         user_id: parseInt(modalSaleUserIdSelect.value),
@@ -325,43 +383,39 @@ async function handleSaleModalSubmit(event) {
             discount_percent: parseFloat(item.discount_percent) || 0
         }))
     };
-
     if (isNaN(saleData.store_id) || isNaN(saleData.user_id) || !saleData.payment_method) {
         alert('Оберіть магазин, касира та метод оплати!'); return;
     }
-
     try {
         const result = await createSaleAPI(saleData);
         if (apiResponseDiv) apiResponseDiv.textContent = `Чек ${result.checkNumber} успішно створено. ${result.message || ''}`;
-        
-        // Тут можна показати HTML чека, якщо result.checkHtmlContent є
         if (result.checkHtmlContent) {
-            // Логіка для показу/друку чека (можна в новій вкладці або модалці)
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(result.checkHtmlContent);
-            printWindow.document.close();
-            printWindow.focus();
-            // setTimeout(() => { printWindow.print(); }, 500); // Затримка для завантаження стилів
+            const printWindow = window.open('', '_blank', 'width=300,height=600,scrollbars=yes,resizable=yes');
+            if (printWindow) {
+                printWindow.document.write(result.checkHtmlContent);
+                printWindow.document.close();
+                printWindow.focus();
+                // setTimeout(() => { try { printWindow.print(); } catch(e){ console.error(e); } }, 500);
+            } else {
+                alert("Не вдалося відкрити вікно для друку. Перевірте блокувальник спливаючих вікон.");
+            }
         }
-
         closeSaleModal();
-        loadSales(); // Оновлюємо список чеків
-        if (typeof loadAllPurchaseItems === 'function') { // Якщо ця функція існує (з uiPurchaseManager)
-            loadAllPurchaseItems(); // Оновлюємо залишки партій
+        loadSales(); 
+        // Оновлення залишків партій, якщо ця функція імпортована та доступна
+        if (typeof loadAllPurchaseItems === 'function') {
+            loadAllPurchaseItems();
         }
     } catch (error) {
         console.error('Помилка створення чека:', error);
-        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка створення чека: ${error.message}`;
-        alert(`Помилка: ${error.message}`);
+        const errorMessage = error.message || (typeof error === 'string' ? error : "Невідома помилка сервера.");
+        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка створення чека: ${errorMessage}`;
+        alert(`Помилка: ${errorMessage}`);
     }
 }
 
-// Функції loadSales, viewSaleDetails, setupSalesTableEventListeners, escapeHTML
-// залишаються в основному такими ж. viewSaleDetails може потребувати оновлення,
-// якщо ви хочете відображати собівартість, розраховану на бекенді.
-// Я скопіюю їх з вашого поточного файлу для повноти.
-
 export async function loadSales() {
+    // ... (код залишається таким же) ...
     if (!salesTableBody) return;
     try {
         const sales = await fetchSalesAPI();
@@ -388,33 +442,8 @@ export async function loadSales() {
     }
 }
 
-async function viewSaleDetails(saleId) {
-    try {
-        const saleDoc = await fetchSaleByIdAPI(saleId);
-        let detailsHtml = `<h3>Деталі Чека ID: ${saleDoc.id} (№ ${escapeHTML(saleDoc.check_number_display)})</h3>
-                           <p>Дата: ${new Date(saleDoc.sale_timestamp).toLocaleString('uk-UA')}</p>
-                           <p>Магазин: ${escapeHTML(saleDoc.store_name)} (ID: ${saleDoc.store_id})</p>
-                           <p>Касир: ${escapeHTML(saleDoc.user_name)} (ID: ${saleDoc.user_id})</p>
-                           <p>Метод оплати: ${escapeHTML(saleDoc.payment_method)}</p>
-                           <p>Сума до округлення: ${parseFloat(saleDoc.total_amount_unrounded).toFixed(2)}</p>
-                           <p>Загальна сума (округлена): ${parseFloat(saleDoc.total_amount_rounded).toFixed(2)}</p>
-                           <p>Загальна знижка на чек: ${saleDoc.overall_discount_percent}%</p>
-                           <h4>Товари:</h4><ul>`;
-        saleDoc.items.forEach(item => {
-            detailsHtml += `<li>${escapeHTML(item.product_name)} (ID: ${item.product_id}, ШК: ${escapeHTML(item.product_barcode || 'N/A')}) <br>
-                                 К-сть: ${item.quantity}, 
-                              Ціна: ${parseFloat(item.price_per_unit_sold).toFixed(2)}, 
-                              Знижка: ${item.discount_percent}%, 
-                              Сума рядка: ${parseFloat(item.total_line_amount).toFixed(2)}, 
-                              Собівартість FIFO: ${parseFloat(item.cost_of_goods_sold_fifo).toFixed(2)}</li><br>`;
-        });
-        detailsHtml += `</ul>`;
-        if (apiResponseDiv) apiResponseDiv.innerHTML = detailsHtml;
-    } catch (error) {
-        console.error('Помилка завантаження деталей чека:', error);
-        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка завантаження деталей чека: ${error.message}`;
-    }
-}
+// Стара функція viewSaleDetails, яка виводила HTML в apiResponseDiv, тепер не потрібна.
+// Замість неї буде openSaleModalForView.
 
 export function setupSalesTableEventListeners() {
     if (salesTableBody) {
@@ -422,7 +451,7 @@ export function setupSalesTableEventListeners() {
             const button = event.target.closest('button[data-action="view-sale-details"]');
             if (button) {
                 const saleId = button.dataset.id;
-                viewSaleDetails(saleId);
+                openSaleModalForView(saleId); // Викликаємо відкриття модалки для перегляду
             }
         });
     }

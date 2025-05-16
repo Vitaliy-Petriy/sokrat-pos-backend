@@ -4,110 +4,153 @@
 const authToken = localStorage.getItem('authToken');
 const userRole = localStorage.getItem('userRole');
 
-// Перенаправлення на сторінку входу, якщо немає токена або роль не підходить
 if (!authToken || (userRole !== 'admin' && userRole !== 'manager')) {
     console.warn('Користувач не автентифікований або не має прав доступу до адмін-панелі. Перенаправлення на login.html');
-    localStorage.clear(); // Очищаємо localStorage на випадок невалідних даних
+    localStorage.clear();
     window.location.href = '/login.html';
-    // Важливо: якщо перенаправлення відбувається, подальший код у цьому файлі не має виконуватися.
+    // Щоб гарантовано зупинити виконання скрипта, можна кинути помилку:
+    // throw new Error("Redirecting to login page. Further script execution stopped.");
 }
 // --- КІНЕЦЬ: Перевірка автентифікації та ролі ---
 
 import { initStoreControls, loadStores } from './modules/uiStoreManager.js';
 import { initUserControls, loadUsers } from './modules/uiUserManager.js';
-import { initProductControls, loadProducts } from './modules/uiProductManager.js';
+import { initProductControls /*, loadProducts */ } from './modules/uiProductManager.js'; 
+// loadProducts тепер викликається зсередини initProductControls або при кліках на підвкладки
 import { initPurchaseControls, loadPurchases, loadAllPurchaseItems } from './modules/uiPurchaseManager.js';
 import { initSaleControls, loadSales } from './modules/uiSaleManager.js';
 
+let globalApiResponseDiv = null; 
+
+async function loadTabContent(templateUrl, targetTabId) {
+    const container = document.getElementById('tabContentContainer');
+    if (!container) {
+        console.error('Контейнер #tabContentContainer не знайдено!');
+        return;
+    }
+    container.innerHTML = '<div class="container" style="text-align:center; padding: 50px; font-style:italic;">Завантаження вмісту вкладки...</div>';
+
+    try {
+        const response = await fetch(templateUrl);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status} - Не вдалося завантажити шаблон: ${templateUrl}`);
+        }
+        const html = await response.text();
+        container.innerHTML = html;
+        console.log(`Завантажено та відображено контент для ${targetTabId} з ${templateUrl}`);
+
+        if (!globalApiResponseDiv) { 
+            globalApiResponseDiv = document.getElementById('apiResponse');
+        }
+
+        // Ініціалізація контролів та завантаження даних для КОНКРЕТНОЇ завантаженої вкладки
+        switch (targetTabId) {
+            case 'stores':
+                initStoreControls(globalApiResponseDiv);
+                if (document.getElementById('storesTable')) loadStores();
+                break;
+            case 'users':
+                initUserControls(globalApiResponseDiv);
+                if (document.getElementById('usersTable')) loadUsers();
+                break;
+            case 'products':
+                initProductControls(globalApiResponseDiv); 
+                // Початкове завантаження товарів тепер повністю кероване всередині initProductControls
+                break;
+            case 'purchases':
+                initPurchaseControls(globalApiResponseDiv);
+                if (document.getElementById('purchasesTable')) loadPurchases();
+                // Список всіх партій тепер на вкладці "Склад", тому тут не завантажуємо
+                // if (document.getElementById('purchaseItemsTable')) loadAllPurchaseItems(); // Видалено
+                break;
+            case 'sales':
+                initSaleControls(globalApiResponseDiv);
+                if (document.getElementById('salesTable')) loadSales();
+                break;
+            case 'stock': // Нова вкладка "Склад"
+                // Якщо для вкладки "Склад" потрібні свої специфічні UI контроли,
+                // потрібно створити uiStockManager.js та initStockControls()
+                // Поки що, припускаємо, що loadAllPurchaseItems з uiPurchaseManager достатньо
+                // і вона знає, куди рендерити дані (або приймає параметр)
+                if (document.getElementById('purchaseItemsTableStockPage')) {
+                    loadAllPurchaseItems('purchaseItemsTableStockPageBody'); // Передаємо ID tbody
+                } else {
+                    console.warn("Таблиця для складу (purchaseItemsTableStockPage) не знайдена.");
+                }
+                const fetchStockButton = document.getElementById('fetchAllPurchaseItemsBtnStockPage');
+                if(fetchStockButton && typeof loadAllPurchaseItems === 'function') {
+                    // Видаляємо старі обробники, щоб уникнути дублювання, якщо loadTabContent викликається повторно для цієї вкладки
+                    const newFetchStockButton = fetchStockButton.cloneNode(true);
+                    fetchStockButton.parentNode.replaceChild(newFetchStockButton, fetchStockButton);
+                    newFetchStockButton.addEventListener('click', () => loadAllPurchaseItems('purchaseItemsTableStockPageBody'));
+                }
+                break;
+            case 'reports':
+                console.log('Вкладка "Звіти" активована.');
+                if (globalApiResponseDiv) globalApiResponseDiv.textContent = "Вкладка Звітів.";
+                break;
+            case 'dashboard':
+                console.log('Вкладка "Головна" активована.');
+                if (globalApiResponseDiv) globalApiResponseDiv.textContent = "Вітаємо на головній сторінці!";
+                break;
+            default:
+                console.warn(`Немає специфічної логіки ініціалізації для вкладки: ${targetTabId}`);
+        }
+
+    } catch (error) {
+        console.error(`Помилка завантаження вмісту вкладки ${targetTabId} (${templateUrl}):`, error);
+        container.innerHTML = `<div class="container"><p style="color:red; font-weight:bold;">Помилка завантаження вмісту вкладки.</p><p>${error.message}</p></div>`;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    const tabs = document.querySelectorAll('nav.sidebar ul li a:not(#logoutBtnAdminSidebar)'); // Виключаємо кнопку виходу з обробки як вкладку
-    const tabContents = document.querySelectorAll('.tab-content');
-    const apiResponseDiv = document.getElementById('apiResponse');
-    const logoutBtnAdmin = document.getElementById('logoutBtnAdmin'); // Кнопка виходу в хедері
-    const logoutBtnAdminSidebar = document.getElementById('logoutBtnAdminSidebar'); // Кнопка виходу на бічній панелі (якщо є)
+    globalApiResponseDiv = document.getElementById('apiResponse'); 
 
-    console.log("DOM завантажено. app.js стартує для адмін-панелі.");
+    const tabs = document.querySelectorAll('nav.sidebar ul li a:not(#logoutBtnAdminSidebar)'); // Виключаємо кнопку виходу, якщо вона є посиланням
+    const logoutBtnAdmin = document.getElementById('logoutBtnAdmin');
+    const logoutBtnAdminSidebar = document.getElementById('logoutBtnAdminSidebar'); // Якщо у вас є кнопка виходу в сайдбарі з таким ID
 
-    if (!apiResponseDiv) {
+    console.log("DOM завантажено. app.js (з динамічним завантаженням) стартує.");
+
+    if (!globalApiResponseDiv) {
         console.error("Елемент #apiResponse не знайдено! Повідомлення API не будуть відображатися.");
     }
 
-    // --- Обробник кнопки "Вийти" ---
     const handleLogout = () => {
-        localStorage.clear(); // Очищаємо всі дані сесії з localStorage
-        window.location.href = '/login.html'; // Перенаправлення на сторінку входу
+        localStorage.clear();
+        window.location.href = '/login.html';
     };
 
-    if (logoutBtnAdmin) {
-        logoutBtnAdmin.addEventListener('click', handleLogout);
-    }
-    if (logoutBtnAdminSidebar) { 
+    if (logoutBtnAdmin) logoutBtnAdmin.addEventListener('click', handleLogout);
+    if (logoutBtnAdminSidebar) {
         logoutBtnAdminSidebar.addEventListener('click', (e) => {
-            e.preventDefault(); 
+            e.preventDefault(); // Якщо це посилання <a>
             handleLogout();
         });
     }
-    // --- Кінець обробника кнопки "Вийти" ---
-
-    console.log("Ініціалізація ВСІХ контролів адмін-панелі...");
-    initStoreControls(apiResponseDiv);
-    initUserControls(apiResponseDiv);
-    initProductControls(apiResponseDiv);
-    initPurchaseControls(apiResponseDiv);
-    initSaleControls(apiResponseDiv);
-    console.log("Ініціалізація контролів адмін-панелі завершена.");
 
     tabs.forEach(tab => {
         tab.addEventListener('click', (event) => {
             event.preventDefault();
-            console.log(`Клік на вкладці: ${tab.dataset.tab}`);
-            
-            tabs.forEach(t => t.classList.remove('active'));
-            tabContents.forEach(content => {
-                if (content) content.classList.remove('active');
-            });
+            const targetTabId = tab.dataset.tab;
+            const templateUrl = tab.dataset.template; 
+            console.log(`Клік на вкладці: ${targetTabId}, шаблон: ${templateUrl}`);
 
-            if (tab) tab.classList.add('active');
-            const targetTabId = tab ? tab.getAttribute('data-tab') : null;
-            
-            if (targetTabId) {
-                const activeContent = document.getElementById(targetTabId);
-                if (activeContent) {
-                    activeContent.classList.add('active');
-                    console.log(`Активовано контент: ${targetTabId}`);
-                    
-                    // Оновлена логіка завантаження даних для активної вкладки
-                    if (targetTabId === 'stores') {
-                        if (document.getElementById('storesTable')) {
-                            loadStores();
-                        }
-                    } else if (targetTabId === 'users') {
-                        if (document.getElementById('usersTable')) {
-                            loadUsers();
-                        }
-                    } else if (targetTabId === 'products') {
-                        const productListSubTab = document.getElementById('productListSubTab');
-                        const noActiveProductSubTab = !document.querySelector('#products .product-subtab-button.active');
-                        
-                        if ((productListSubTab && productListSubTab.classList.contains('active')) || noActiveProductSubTab) {
-                            if (document.getElementById('productsTable')) {
-                                loadProducts();
-                            }
-                        }
-                    } else if (targetTabId === 'purchases') { 
-                        if (document.getElementById('purchasesTable')) { 
-                             loadPurchases();
-                        }
-                        if (document.getElementById('purchaseItemsTable')) {
-                             loadAllPurchaseItems();
-                        }
-                    } else if (targetTabId === 'sales') { 
-                        if (document.getElementById('salesTable')) {
-                            loadSales(); 
-                        }
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            if (templateUrl) { 
+                loadTabContent(templateUrl, targetTabId);
+            } else { // Обробка для вкладок без data-template (наприклад, якщо dashboard не має partial)
+                console.warn(`Для вкладки ${targetTabId} не вказано data-template. Вміст не буде завантажено динамічно.`);
+                const container = document.getElementById('tabContentContainer');
+                if (container) {
+                    if (targetTabId === 'dashboard') {
+                         container.innerHTML = '<h2>Головна сторінка</h2><p>Ласкаво просимо до панелі адміністратора! (Статичний вміст, якщо шаблон не вказано)</p>';
+                         if(globalApiResponseDiv) globalApiResponseDiv.textContent = "Вітаємо на головній сторінці!";
+                    } else {
+                        container.innerHTML = `<p>Контент для вкладки "${targetTabId}" не визначено через відсутність data-template.</p>`;
                     }
-                } else {
-                    console.error(`Контент для вкладки "${targetTabId}" не знайдено.`);
                 }
             }
         });
@@ -116,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Активація вкладки за замовчуванням
     const defaultTabLink = document.querySelector('nav.sidebar ul li a[data-tab="dashboard"]');
     if (defaultTabLink) {
-        console.log("Симуляція кліку на dashboard");
+        console.log("Симуляція кліку на dashboard для початкового завантаження");
         defaultTabLink.click(); 
     } else {
         const firstTabLink = document.querySelector('nav.sidebar ul li a:not(#logoutBtnAdminSidebar)');
@@ -127,5 +170,4 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn("Посилання на вкладки не знайдено для активації за замовчуванням.");
         }
     }
-    console.log("app.js (адмін-панель) завершив роботу.");
 });

@@ -1,81 +1,109 @@
 // js/modules/uiPurchaseManager.js
-import { createPurchaseAPI, fetchPurchasesAPI, fetchPurchaseByIdAPI, fetchAllPurchaseItemsAPI, fetchStoresAPI, fetchProductsAPI, getProductByIdAPI } from './apiService.js'; // Додаємо getProductByIdAPI
+import { 
+    createPurchaseAPI, fetchPurchasesAPI, fetchPurchaseByIdAPI, 
+    fetchAllPurchaseItemsAPI, fetchStoresAPI, 
+    getProductByIdAPI, // Для отримання назви товару при додаванні за ID (якщо пошук не використовується)
+    searchProductsByNameOrBarcodeAPI // Для пошуку товарів
+} from './apiService.js';
 
-// Старі змінні для форми (деякі будуть видалені або замінені)
-// let purchaseDocumentForm, purchaseDocIdInput, purchaseDocStoreIdSelect, purchaseDocDateInput,
-//     purchaseDocNumberInput, purchaseDocItemsContainer;
+let purchasesTableBody, apiResponseDiv;
 
-let purchasesTableBody, purchaseItemsTableBody, apiResponseDiv;
-
-// Нові змінні для модального вікна
+// Елементи модального вікна
 let addNewPurchaseDocBtn, purchaseModal, purchaseModalTitle, closePurchaseModalBtn, cancelPurchaseModalBtn,
     purchaseModalForm, modalPurchaseDocIdInput, modalPurchaseStoreIdSelect, modalPurchaseDateInput,
     modalPurchaseDocNumberInput, modalPurchaseItemsTableBody,
-    modalPurchaseProductIdInput, modalPurchaseProductQtyInput, modalPurchaseProductPriceInput, addProductToPurchaseModalBtn,
+    modalPurchaseProductSearchInput, modalPurchaseProductSearchResults,
+    modalPurchaseSelectedProductName, modalPurchaseSelectedProductId,
+    modalPurchaseProductQtyInput, modalPurchaseProductPriceInput, addProductToPurchaseModalBtn,
     modalPurchaseTotalAmountSpan;
 
-// Масив для зберігання товарів у поточному документі в модалці
 let currentPurchaseModalItems = [];
+let debounceTimerPurchase; // Окремий таймер для закупівель
 
 export function initPurchaseControls(responseDivElement) {
     apiResponseDiv = responseDivElement;
     purchasesTableBody = document.querySelector('#purchasesTable tbody');
-    purchaseItemsTableBody = document.querySelector('#purchaseItemsTable tbody');
-
-    // Ініціалізація елементів модального вікна
+    
     addNewPurchaseDocBtn = document.getElementById('addNewPurchaseDocBtn');
     purchaseModal = document.getElementById('purchaseModal');
-    purchaseModalTitle = document.getElementById('purchaseModalTitle');
-    closePurchaseModalBtn = document.getElementById('closePurchaseModalBtn');
-    cancelPurchaseModalBtn = document.getElementById('cancelPurchaseModalBtn');
-    purchaseModalForm = document.getElementById('purchaseModalForm');
-    modalPurchaseDocIdInput = document.getElementById('modalPurchaseDocId');
-    modalPurchaseStoreIdSelect = document.getElementById('modalPurchaseStoreId');
-    modalPurchaseDateInput = document.getElementById('modalPurchaseDate');
-    modalPurchaseDocNumberInput = document.getElementById('modalPurchaseDocNumber');
-    modalPurchaseItemsTableBody = document.getElementById('modalPurchaseItemsTableBody');
-    
-    modalPurchaseProductIdInput = document.getElementById('modalPurchaseProductIdInput');
-    modalPurchaseProductQtyInput = document.getElementById('modalPurchaseProductQtyInput');
-    modalPurchaseProductPriceInput = document.getElementById('modalPurchaseProductPriceInput');
-    addProductToPurchaseModalBtn = document.getElementById('addProductToPurchaseModalBtn');
-    modalPurchaseTotalAmountSpan = document.getElementById('modalPurchaseTotalAmount');
 
+    if (purchaseModal) { 
+        purchaseModalTitle = document.getElementById('purchaseModalTitle');
+        closePurchaseModalBtn = document.getElementById('closePurchaseModalBtn');
+        cancelPurchaseModalBtn = document.getElementById('cancelPurchaseModalBtn');
+        purchaseModalForm = document.getElementById('purchaseModalForm');
+        modalPurchaseDocIdInput = document.getElementById('modalPurchaseDocId');
+        modalPurchaseStoreIdSelect = document.getElementById('modalPurchaseStoreId');
+        modalPurchaseDateInput = document.getElementById('modalPurchaseDate');
+        modalPurchaseDocNumberInput = document.getElementById('modalPurchaseDocNumber');
+        modalPurchaseItemsTableBody = document.getElementById('modalPurchaseItemsTableBody');
+        
+        modalPurchaseProductSearchInput = document.getElementById('modalPurchaseProductSearchInput');
+        modalPurchaseProductSearchResults = document.getElementById('modalPurchaseProductSearchResults');
+        modalPurchaseSelectedProductName = document.getElementById('modalPurchaseSelectedProductName');
+        modalPurchaseSelectedProductId = document.getElementById('modalPurchaseSelectedProductId');
+        
+        modalPurchaseProductQtyInput = document.getElementById('modalPurchaseProductQtyInput');
+        modalPurchaseProductPriceInput = document.getElementById('modalPurchaseProductPriceInput');
+        addProductToPurchaseModalBtn = document.getElementById('addProductToPurchaseModalBtn');
+        modalPurchaseTotalAmountSpan = document.getElementById('modalPurchaseTotalAmount');
 
-    if (!purchasesTableBody || !purchaseItemsTableBody || !addNewPurchaseDocBtn || !purchaseModal || !purchaseModalForm) {
-        console.warn('Основні елементи для управління закупівлями (модальне вікно) не знайдені.');
-        return;
-    }
+        if (addNewPurchaseDocBtn) {
+            addNewPurchaseDocBtn.addEventListener('click', openPurchaseModalForCreate);
+        } else {
+            console.warn("Кнопка addNewPurchaseDocBtn не знайдена.");
+        }
 
-    addNewPurchaseDocBtn.addEventListener('click', openPurchaseModalForCreate);
-    if (closePurchaseModalBtn) closePurchaseModalBtn.addEventListener('click', closePurchaseModal);
-    if (cancelPurchaseModalBtn) cancelPurchaseModalBtn.addEventListener('click', closePurchaseModal);
-    purchaseModalForm.addEventListener('submit', handlePurchaseModalSubmit);
-    
-    if (addProductToPurchaseModalBtn) {
-        addProductToPurchaseModalBtn.addEventListener('click', handleAddProductToModalTable);
-    }
+        if (closePurchaseModalBtn) closePurchaseModalBtn.addEventListener('click', closePurchaseModal);
+        if (cancelPurchaseModalBtn) cancelPurchaseModalBtn.addEventListener('click', closePurchaseModal);
+        
+        if (purchaseModalForm) {
+            purchaseModalForm.addEventListener('submit', handlePurchaseModalSubmit);
+            console.log("Обробник SUBMIT для purchaseModalForm ПРИВ'ЯЗАНО.");
+        } else {
+            console.warn("Форма purchaseModalForm не знайдена під час ініціалізації!");
+        }
+        
+        if (modalPurchaseProductSearchInput) {
+            modalPurchaseProductSearchInput.addEventListener('input', handlePurchaseProductSearchInput);
+            modalPurchaseProductSearchInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    if (modalPurchaseProductSearchResults) modalPurchaseProductSearchResults.style.display = 'none';
+                }, 200);
+            });
+             modalPurchaseProductSearchInput.addEventListener('focus', () => {
+                if (modalPurchaseProductSearchInput.value.trim() !== '' && modalPurchaseProductSearchResults && modalPurchaseProductSearchResults.children.length > 0) {
+                     modalPurchaseProductSearchResults.style.display = 'block';
+                }
+            });
+        }
+        if (modalPurchaseProductSearchResults) {
+            // Делегування події для кліку по результатах пошуку
+            modalPurchaseProductSearchResults.addEventListener('mousedown', handlePurchaseProductResultSelect); // mousedown спрацьовує до blur
+        }
+        
+        if (addProductToPurchaseModalBtn) {
+            addProductToPurchaseModalBtn.addEventListener('click', handleAddProductToModalTableFromSelection);
+        }
 
-    if (purchaseModal) {
         purchaseModal.addEventListener('click', (event) => {
-            if (event.target === purchaseModal) {
-                closePurchaseModal();
-            }
+            if (event.target === purchaseModal) closePurchaseModal();
         });
+        
+        populateStoreSelect(modalPurchaseStoreIdSelect); 
+    } else {
+        console.warn("Модальне вікно purchaseModal не знайдено.");
     }
     
-    // Кнопка для оновлення списку всіх партій (залишається)
-    const fetchAllPurchaseItemsBtn = document.getElementById('fetchAllPurchaseItemsBtn');
-    if (fetchAllPurchaseItemsBtn) {
-        fetchAllPurchaseItemsBtn.addEventListener('click', loadAllPurchaseItems);
-    }
-    
-    populateStoreSelect(modalPurchaseStoreIdSelect); // Заповнюємо select магазинів у модалці
-    setupPurchasesTableEventListeners(); // Для кнопки "Деталі" у списку документів
+    setupPurchasesTableEventListeners();
+    console.log("[uiPurchaseManager] initPurchaseControls завершено.");
 }
 
 async function populateStoreSelect(selectElement) {
-    if (!selectElement) return;
+    if (!selectElement) {
+        console.warn("populateStoreSelect: selectElement не передано або не знайдено.");
+        return;
+    }
     try {
         const stores = await fetchStoresAPI();
         selectElement.innerHTML = '<option value="">-- Оберіть магазин --</option>';
@@ -90,86 +118,153 @@ async function populateStoreSelect(selectElement) {
     }
 }
 
+function setPurchaseFormReadOnly(isReadOnly) {
+    if (modalPurchaseStoreIdSelect) modalPurchaseStoreIdSelect.disabled = isReadOnly;
+    if (modalPurchaseDateInput) modalPurchaseDateInput.readOnly = isReadOnly;
+    if (modalPurchaseDocNumberInput) modalPurchaseDocNumberInput.readOnly = isReadOnly;
+
+    const addProductSection = modalPurchaseProductSearchInput?.closest('div[style*="border: 1px solid #eee"]'); // Знаходимо батьківський блок секції додавання
+    if (addProductSection) addProductSection.style.display = isReadOnly ? 'none' : 'block'; // 'block' або початковий стиль
+    
+    const submitButton = purchaseModalForm?.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.style.display = isReadOnly ? 'none' : 'inline-block';
+
+    if (modalPurchaseItemsTableBody) {
+        modalPurchaseItemsTableBody.querySelectorAll('input').forEach(input => {
+            input.readOnly = isReadOnly;
+        });
+        modalPurchaseItemsTableBody.querySelectorAll('.remove-modal-item-btn').forEach(button => {
+            button.style.display = isReadOnly ? 'none' : 'inline-block';
+        });
+    }
+}
+
+async function openPurchaseModalForView(purchaseId) {
+    if (!purchaseModal || !purchaseModalForm) {
+        console.error("Елементи модального вікна закупівлі не ініціалізовані для перегляду."); return;
+    }
+    
+    try {
+        if (apiResponseDiv) apiResponseDiv.textContent = `Завантаження деталей закупівлі ID: ${purchaseId}...`;
+        const purchaseDoc = await fetchPurchaseByIdAPI(purchaseId);
+        if (!purchaseDoc) {
+            if (apiResponseDiv) apiResponseDiv.textContent = `Не вдалося завантажити документ закупівлі ID: ${purchaseId}.`;
+            alert(`Не вдалося завантажити документ закупівлі ID: ${purchaseId}.`);
+            return;
+        }
+
+        if (purchaseModalTitle) purchaseModalTitle.textContent = `Деталі Документа Закупівлі ID: ${purchaseDoc.id}`;
+        purchaseModalForm.reset(); 
+        if (modalPurchaseDocIdInput) modalPurchaseDocIdInput.value = purchaseDoc.id;
+
+        if (modalPurchaseStoreIdSelect) await populateStoreSelect(modalPurchaseStoreIdSelect); 
+        if (modalPurchaseStoreIdSelect) modalPurchaseStoreIdSelect.value = purchaseDoc.store_id;
+        if (modalPurchaseDateInput) modalPurchaseDateInput.value = purchaseDoc.purchase_date.split('T')[0]; 
+        if (modalPurchaseDocNumberInput) modalPurchaseDocNumberInput.value = purchaseDoc.document_number || '';
+
+        currentPurchaseModalItems = purchaseDoc.items.map(item => ({
+            product_id: item.product_id,
+            product_name: item.product_name,
+            quantity: parseFloat(item.quantity_initial),
+            price_per_unit_purchase: parseFloat(item.price_per_unit_purchase)
+        }));
+        
+        setPurchaseFormReadOnly(true); 
+        renderPurchaseModalItems(); 
+        
+        purchaseModal.style.display = 'block';
+        if (apiResponseDiv) apiResponseDiv.textContent = `Відображено деталі закупівлі ID: ${purchaseDoc.id}.`;
+
+    } catch (error) {
+        console.error(`Помилка відкриття деталей закупівлі ID ${purchaseId}:`, error);
+        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка: ${error.message}`;
+        alert(`Помилка завантаження деталей: ${error.message}`);
+    }
+}
+
 function openPurchaseModalForCreate() {
-    if (!purchaseModal || !purchaseModalForm || !modalPurchaseDateInput || !modalPurchaseItemsTableBody || !modalPurchaseTotalAmountSpan) {
+    if (!purchaseModal || !purchaseModalForm) {
         console.error("Елементи модального вікна закупівлі не ініціалізовані для створення."); return;
     }
-    purchaseModalTitle.textContent = 'Створити Документ Закупівлі';
+    if (purchaseModalTitle) purchaseModalTitle.textContent = 'Створити Документ Закупівлі';
     purchaseModalForm.reset();
-    modalPurchaseDocIdInput.value = ''; // Для нового документа ID порожній
-    currentPurchaseModalItems = []; // Очищаємо список товарів
-    renderPurchaseModalItems(); // Оновлюємо таблицю товарів (має бути порожня)
-    updateModalPurchaseTotalAmount(); // Оновлюємо загальну суму
-    if (modalPurchaseDateInput) modalPurchaseDateInput.valueAsDate = new Date(); // Поточна дата
-    populateStoreSelect(modalPurchaseStoreIdSelect); // Оновлюємо список магазинів
+    if (modalPurchaseDocIdInput) modalPurchaseDocIdInput.value = ''; 
+    currentPurchaseModalItems = []; 
+    
+    setPurchaseFormReadOnly(false); 
+    renderPurchaseModalItems(); 
+    
+    if (modalPurchaseDateInput) modalPurchaseDateInput.valueAsDate = new Date();
+    if (modalPurchaseStoreIdSelect) populateStoreSelect(modalPurchaseStoreIdSelect); 
     purchaseModal.style.display = 'block';
+    if (apiResponseDiv) apiResponseDiv.textContent = "Форма для створення нового документа закупівлі готова.";
+    if (modalPurchaseProductSearchInput) modalPurchaseProductSearchInput.focus();
 }
 
 function closePurchaseModal() {
     if(purchaseModal) purchaseModal.style.display = 'none';
+    currentPurchaseModalItems = []; // Очищаємо товари при закритті
+    if (modalPurchaseProductSearchInput) modalPurchaseProductSearchInput.value = ''; // Очищаємо поле пошуку
+    if (modalPurchaseSelectedProductName) modalPurchaseSelectedProductName.value = 'Не обрано';
+    if (modalPurchaseSelectedProductId) modalPurchaseSelectedProductId.value = '';
+    if (apiResponseDiv) apiResponseDiv.textContent = "Модальне вікно закупівлі закрито.";
 }
 
-// Функція для візуалізації товарів у таблиці модального вікна
 function renderPurchaseModalItems() {
     if (!modalPurchaseItemsTableBody) return;
+    const isReadOnly = modalPurchaseDateInput?.readOnly || false; 
+
     modalPurchaseItemsTableBody.innerHTML = '';
     currentPurchaseModalItems.forEach((item, index) => {
         const row = modalPurchaseItemsTableBody.insertRow();
         const itemSubtotal = (parseFloat(item.quantity) * parseFloat(item.price_per_unit_purchase)).toFixed(2);
         row.innerHTML = `
             <td>${escapeHTML(item.product_name)} (ID: ${item.product_id})</td>
-            <td><input type="number" value="${item.quantity}" min="0.001" step="0.001" class="modal-item-quantity" data-index="${index}"></td>
-            <td><input type="number" value="${item.price_per_unit_purchase.toFixed(2)}" min="0.00" step="0.01" class="modal-item-price" data-index="${index}"></td>
+            <td><input type="number" value="${item.quantity}" min="0.001" step="0.001" class="modal-item-quantity" data-index="${index}" ${isReadOnly ? 'readonly' : ''}></td>
+            <td><input type="number" value="${parseFloat(item.price_per_unit_purchase).toFixed(2)}" min="0.00" step="0.01" class="modal-item-price" data-index="${index}" ${isReadOnly ? 'readonly' : ''}></td>
             <td>${itemSubtotal}</td>
-            <td><button type="button" class="delete-btn remove-modal-item-btn" data-index="${index}">X</button></td>
+            <td><button type="button" class="delete-btn remove-modal-item-btn" data-index="${index}" style="display: ${isReadOnly ? 'none' : 'inline-block'};">X</button></td>
         `;
     });
 
-    // Додаємо обробники для інпутів кількості/ціни та кнопок видалення
-    modalPurchaseItemsTableBody.querySelectorAll('.modal-item-quantity, .modal-item-price').forEach(input => {
-        input.addEventListener('change', handleModalItemChange);
-    });
-    modalPurchaseItemsTableBody.querySelectorAll('.remove-modal-item-btn').forEach(button => {
-        button.addEventListener('click', handleRemoveModalItem);
-    });
+    if (!isReadOnly) { 
+        modalPurchaseItemsTableBody.querySelectorAll('.modal-item-quantity, .modal-item-price').forEach(input => {
+            input.removeEventListener('change', handleModalItemChange); // Видаляємо старі, щоб уникнути дублів
+            input.addEventListener('change', handleModalItemChange);
+        });
+        modalPurchaseItemsTableBody.querySelectorAll('.remove-modal-item-btn').forEach(button => {
+            button.removeEventListener('click', handleRemoveModalItem); // Видаляємо старі
+            button.addEventListener('click', handleRemoveModalItem);
+        });
+    }
     updateModalPurchaseTotalAmount();
 }
 
-// Обробник зміни кількості або ціни товару в модалці
 function handleModalItemChange(event) {
     const index = parseInt(event.target.dataset.index);
+    if (index < 0 || index >= currentPurchaseModalItems.length) return; // Захист від неіснуючого індексу
     const itemToUpdate = currentPurchaseModalItems[index];
-    if (!itemToUpdate) return;
-
+    
     if (event.target.classList.contains('modal-item-quantity')) {
         const newQuantity = parseFloat(event.target.value);
-        if (!isNaN(newQuantity) && newQuantity > 0) {
-            itemToUpdate.quantity = newQuantity;
-        } else {
-            event.target.value = itemToUpdate.quantity; // Повертаємо старе значення, якщо введене некоректне
-            alert("Кількість має бути позитивним числом.");
-        }
+        if (!isNaN(newQuantity) && newQuantity > 0) itemToUpdate.quantity = newQuantity;
+        else { event.target.value = itemToUpdate.quantity; alert("Кількість має бути позитивним числом."); }
     } else if (event.target.classList.contains('modal-item-price')) {
         const newPrice = parseFloat(event.target.value);
-        if (!isNaN(newPrice) && newPrice >= 0) {
-            itemToUpdate.price_per_unit_purchase = newPrice;
-        } else {
-            event.target.value = itemToUpdate.price_per_unit_purchase.toFixed(2); // Повертаємо старе значення
-            alert("Ціна не може бути від'ємною.");
-        }
+        if (!isNaN(newPrice) && newPrice >= 0) itemToUpdate.price_per_unit_purchase = newPrice;
+        else { event.target.value = itemToUpdate.price_per_unit_purchase.toFixed(2); alert("Ціна не може бути від'ємною."); }
     }
-    renderPurchaseModalItems(); // Перерендеримо, щоб оновити суму рядка та загальну суму
+    renderPurchaseModalItems(); 
 }
 
-// Обробник видалення товару з таблиці в модалці
 function handleRemoveModalItem(event) {
     const index = parseInt(event.target.dataset.index);
-    currentPurchaseModalItems.splice(index, 1);
-    renderPurchaseModalItems();
+    if (index >= 0 && index < currentPurchaseModalItems.length) { // Захист
+        currentPurchaseModalItems.splice(index, 1);
+        renderPurchaseModalItems();
+    }
 }
 
-
-// Оновлення загальної суми в модальному вікні
 function updateModalPurchaseTotalAmount() {
     if (!modalPurchaseTotalAmountSpan) return;
     const total = currentPurchaseModalItems.reduce((sum, item) => {
@@ -178,116 +273,198 @@ function updateModalPurchaseTotalAmount() {
     modalPurchaseTotalAmountSpan.textContent = total.toFixed(2);
 }
 
-// Обробник натискання кнопки "Додати товар" (поки що за ID)
-async function handleAddProductToModalTable() {
-    if (!modalPurchaseProductIdInput || !modalPurchaseProductQtyInput || !modalPurchaseProductPriceInput) return;
+async function handlePurchaseProductSearchInput(event) {
+    const searchTerm = event.target.value.trim();
+    if (!modalPurchaseProductSearchResults || !modalPurchaseSelectedProductId || !modalPurchaseSelectedProductName) return;
 
-    const productId = modalPurchaseProductIdInput.value.trim();
+    modalPurchaseSelectedProductId.value = ''; 
+    modalPurchaseSelectedProductName.value = 'Пошук...';
+
+    if (searchTerm.length < 2) { 
+        modalPurchaseProductSearchResults.innerHTML = '';
+        modalPurchaseProductSearchResults.style.display = 'none';
+        if (searchTerm.length === 0) modalPurchaseSelectedProductName.value = 'Не обрано';
+        return;
+    }
+
+    modalPurchaseProductSearchResults.style.display = 'block';
+    modalPurchaseProductSearchResults.innerHTML = '<li>Завантаження...</li>';
+
+    clearTimeout(debounceTimerPurchase);
+    debounceTimerPurchase = setTimeout(async () => {
+        try {
+            const results = await searchProductsByNameOrBarcodeAPI(searchTerm, 7);
+            displayPurchaseProductSearchResults(results);
+        } catch (error) {
+            console.error("Помилка пошуку товару для закупівлі:", error);
+            if (modalPurchaseProductSearchResults) modalPurchaseProductSearchResults.innerHTML = `<li style="color:red;">Помилка пошуку: ${error.message}</li>`;
+        }
+    }, 300); 
+}
+
+function displayPurchaseProductSearchResults(products) {
+    if (!modalPurchaseProductSearchResults) return;
+    modalPurchaseProductSearchResults.innerHTML = '';
+    if (!products || products.length === 0) {
+        modalPurchaseProductSearchResults.innerHTML = '<li>Товарів не знайдено</li>';
+        modalPurchaseProductSearchResults.style.display = 'block';
+        return;
+    }
+
+    products.forEach(product => {
+        const li = document.createElement('li');
+        li.textContent = `${product.name} (ID: ${product.id}, ШК: ${product.barcode || '-'}, Ціна: ${product.retail_price})`;
+        li.dataset.productId = product.id;
+        li.dataset.productName = product.name;
+        // Можна передати і закупівельну ціну з картки товару, якщо вона там є і актуальна
+        li.dataset.purchasePrice = product.purchase_price || '0'; 
+        li.style.padding = '8px';
+        li.style.cursor = 'pointer';
+        li.addEventListener('mouseenter', () => li.style.backgroundColor = '#f0f0f0');
+        li.addEventListener('mouseleave', () => li.style.backgroundColor = 'white');
+        // Обробник кліку тепер через делегування на батьківському елементі (mousedown)
+        modalPurchaseProductSearchResults.appendChild(li);
+    });
+    modalPurchaseProductSearchResults.style.display = 'block';
+}
+
+function handlePurchaseProductResultSelect(event) {
+    // Використовуємо event.target.closest('li') для надійності, якщо всередині li є інші елементи
+    const listItem = event.target.closest('li');
+    if (listItem && listItem.dataset.productId) {
+        const productId = listItem.dataset.productId;
+        const productName = listItem.dataset.productName;
+        const purchasePrice = listItem.dataset.purchasePrice;
+
+        if (modalPurchaseProductSearchInput) modalPurchaseProductSearchInput.value = ''; // Очищаємо поле пошуку
+        if (modalPurchaseSelectedProductName) modalPurchaseSelectedProductName.value = productName;
+        if (modalPurchaseSelectedProductId) modalPurchaseSelectedProductId.value = productId;
+        if (modalPurchaseProductPriceInput && purchasePrice) { // Підставляємо закупівельну ціну, якщо є
+            modalPurchaseProductPriceInput.value = parseFloat(purchasePrice).toFixed(2);
+        } else if (modalPurchaseProductPriceInput) {
+            modalPurchaseProductPriceInput.value = ''; // Очищаємо, якщо немає
+        }
+        
+        if (modalPurchaseProductSearchResults) modalPurchaseProductSearchResults.style.display = 'none';
+        if (modalPurchaseProductQtyInput) modalPurchaseProductQtyInput.focus(); 
+    }
+}
+
+async function handleAddProductToModalTableFromSelection() {
+    if (!modalPurchaseSelectedProductId || !modalPurchaseSelectedProductName || 
+        !modalPurchaseProductQtyInput || !modalPurchaseProductPriceInput) return;
+
+    const productId = modalPurchaseSelectedProductId.value;
+    const productName = modalPurchaseSelectedProductName.value;
     const quantity = parseFloat(modalPurchaseProductQtyInput.value);
     const price = parseFloat(modalPurchaseProductPriceInput.value);
 
-    if (!productId) {
-        alert("Введіть ID товару.");
+    if (!productId || productName === 'Не обрано' || productName === 'Пошук...') {
+        alert("Спочатку оберіть товар зі списку результатів пошуку.");
+        if (modalPurchaseProductSearchInput) modalPurchaseProductSearchInput.focus();
         return;
     }
     if (isNaN(quantity) || quantity <= 0) {
         alert("Вкажіть коректну кількість (більше 0).");
+        if (modalPurchaseProductQtyInput) modalPurchaseProductQtyInput.focus();
         return;
     }
     if (isNaN(price) || price < 0) {
         alert("Вкажіть коректну закупівельну ціну (0 або більше).");
+        if (modalPurchaseProductPriceInput) modalPurchaseProductPriceInput.focus();
         return;
     }
 
-    // Перевіряємо, чи товар вже є у списку
     const existingItemIndex = currentPurchaseModalItems.findIndex(item => item.product_id === parseInt(productId));
     if (existingItemIndex !== -1) {
-        if (confirm("Цей товар вже є в документі. Оновити кількість та ціну? (Ні - товар не буде додано/змінено)")) {
+        if (confirm("Цей товар вже є в документі. Оновити кількість та ціну для існуючого запису?")) {
             currentPurchaseModalItems[existingItemIndex].quantity = quantity;
             currentPurchaseModalItems[existingItemIndex].price_per_unit_purchase = price;
-        } else {
-            return; // Не додаємо і не змінюємо
-        }
+        } else { return; }
     } else {
-        // Отримуємо інформацію про товар (назву) за ID
-        try {
-            const product = await getProductByIdAPI(productId); // Використовуємо getProductByIdAPI
-            if (!product) {
-                alert(`Товар з ID ${productId} не знайдено.`);
-                return;
-            }
-            currentPurchaseModalItems.push({
-                product_id: product.id,
-                product_name: product.name, // Додаємо назву товару
-                quantity: quantity,
-                price_per_unit_purchase: price
-            });
-        } catch (error) {
-            console.error(`Помилка отримання товару ID ${productId}:`, error);
-            alert(`Помилка завантаження товару з ID ${productId}: ${error.message}`);
-            return;
-        }
+        currentPurchaseModalItems.push({
+            product_id: parseInt(productId),
+            product_name: productName,
+            quantity: quantity,
+            price_per_unit_purchase: price
+        });
     }
-
-    renderPurchaseModalItems(); // Оновлюємо таблицю в модалці
-    // Очищаємо поля для наступного товару
-    modalPurchaseProductIdInput.value = '';
-    modalPurchaseProductQtyInput.value = '1';
-    modalPurchaseProductPriceInput.value = '';
-    modalPurchaseProductIdInput.focus();
+    renderPurchaseModalItems();
+    if (modalPurchaseProductSearchInput) modalPurchaseProductSearchInput.value = '';
+    if (modalPurchaseSelectedProductName) modalPurchaseSelectedProductName.value = 'Не обрано';
+    if (modalPurchaseSelectedProductId) modalPurchaseSelectedProductId.value = '';
+    if (modalPurchaseProductQtyInput) modalPurchaseProductQtyInput.value = '1';
+    if (modalPurchaseProductPriceInput) modalPurchaseProductPriceInput.value = '';
+    if (modalPurchaseProductSearchInput) modalPurchaseProductSearchInput.focus();
 }
 
-
 async function handlePurchaseModalSubmit(event) {
+    console.log("handlePurchaseModalSubmit викликано!"); // Перевірка
     event.preventDefault();
+    
+    const purchaseDocId = modalPurchaseDocIdInput ? modalPurchaseDocIdInput.value : null;
+    if (purchaseDocId) { // Якщо це режим перегляду/редагування (редагування ще не реалізовано)
+        alert("Збереження змін для існуючого документа ще не реалізовано. Форма відкрита в режимі перегляду або для створення нового.");
+        console.warn("Спроба зберегти документ з існуючим ID. Функціонал редагування не активний.");
+        return;
+    }
+    
     if (currentPurchaseModalItems.length === 0) {
         alert('Додайте хоча б один товар у документ!');
         if(apiResponseDiv) apiResponseDiv.textContent = 'Помилка: Додайте хоча б один товар у документ!';
         return;
     }
 
+    const storeIdVal = modalPurchaseStoreIdSelect ? modalPurchaseStoreIdSelect.value : null;
+    const purchaseDateVal = modalPurchaseDateInput ? modalPurchaseDateInput.value : null;
+
+    if (!storeIdVal || !purchaseDateVal) {
+        alert('Оберіть магазин та вкажіть дату документа!');
+        if(apiResponseDiv) apiResponseDiv.textContent = 'Помилка: Оберіть магазин та вкажіть дату документа!';
+        return;
+    }
+
     const purchaseData = {
-        store_id: parseInt(modalPurchaseStoreIdSelect.value),
-        purchase_date: modalPurchaseDateInput.value,
-        document_number: modalPurchaseDocNumberInput.value || null,
-        items: currentPurchaseModalItems.map(item => ({ // Беремо товари з currentPurchaseModalItems
+        store_id: parseInt(storeIdVal),
+        purchase_date: purchaseDateVal,
+        document_number: modalPurchaseDocNumberInput ? modalPurchaseDocNumberInput.value || null : null,
+        items: currentPurchaseModalItems.map(item => ({
             product_id: item.product_id,
             quantity: parseFloat(item.quantity),
             price_per_unit_purchase: parseFloat(item.price_per_unit_purchase)
         }))
     };
 
-    if (!purchaseData.store_id || !purchaseData.purchase_date) {
-        alert('Оберіть магазин та вкажіть дату документа!');
-        if(apiResponseDiv) apiResponseDiv.textContent = 'Помилка: Оберіть магазин та вкажіть дату документа!';
-        return;
-    }
-
     try {
-        // const purchaseDocId = modalPurchaseDocIdInput.value; // Для майбутнього редагування
-        // if (purchaseDocId) { /* логіка оновлення */ } else { /* логіка створення */ }
-        
+        console.log("Дані для створення закупівлі:", JSON.stringify(purchaseData, null, 2));
+        if(apiResponseDiv) apiResponseDiv.textContent = 'Збереження документа закупівлі...';
         const result = await createPurchaseAPI(purchaseData);
         if (apiResponseDiv) apiResponseDiv.textContent = `Документ закупівлі ID: ${result.purchase.id} успішно створено.`;
+        alert(`Документ закупівлі ID: ${result.purchase.id} успішно створено.`);
         closePurchaseModal();
-        loadPurchases(); // Оновлюємо список документів
-        loadAllPurchaseItems(); // Оновлюємо список всіх партій
+        loadPurchases(); 
+        loadAllPurchaseItems('purchaseItemsTableStockPageBody'); // Оновлюємо список партій на вкладці "Склад"
     } catch (error) {
         console.error('Помилка створення документа закупівлі:', error);
-        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка створення документа закупівлі: ${error.message}`;
+        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка створення документа закупівлі: ${error.message || error}`;
+        alert(`Помилка створення документа закупівлі: ${error.message || error}`);
     }
 }
 
-
-// Функції loadPurchases, loadAllPurchaseItems, viewPurchaseDetails, setupPurchasesTableEventListeners, escapeHTML
-// залишаються такими ж, як у вашому поточному файлі.
-// Я їх скопіюю сюди для повноти.
-
 export async function loadPurchases() {
-    if (!purchasesTableBody) return;
+    if (!purchasesTableBody) {
+        console.warn("purchasesTableBody не знайдено для loadPurchases");
+        return;
+    }
+    if(apiResponseDiv) apiResponseDiv.textContent = 'Завантаження списку документів закупівлі...';
     try {
         const purchases = await fetchPurchasesAPI();
         purchasesTableBody.innerHTML = '';
+        if (!purchases || purchases.length === 0) {
+            if(apiResponseDiv) apiResponseDiv.textContent = 'Список документів закупівлі порожній.';
+            purchasesTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Список документів закупівлі порожній.</td></tr>`;
+            return;
+        }
         purchases.forEach(doc => {
             const row = purchasesTableBody.insertRow();
             row.innerHTML = `
@@ -297,8 +474,7 @@ export async function loadPurchases() {
                 <td>${escapeHTML(doc.document_number || '')}</td>
                 <td>${parseFloat(doc.total_amount).toFixed(2)}</td>
                 <td>
-                    <button class="view-btn" data-action="view-details" data-id="${doc.id}">Деталі</button>
-                    <!-- Тут можна буде додати кнопку Редагувати, коли реалізуємо редагування -->
+                    <button class="view-btn" data-action="view-purchase-details" data-id="${doc.id}">Деталі</button>
                 </td>
             `;
         });
@@ -306,16 +482,29 @@ export async function loadPurchases() {
     } catch (error) {
         console.error('Помилка завантаження документів закупівель:', error);
         if (apiResponseDiv) apiResponseDiv.textContent = `Помилка завантаження документів закупівель: ${error.message}`;
+        if (purchasesTableBody) purchasesTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Помилка завантаження даних.</td></tr>`;
     }
 }
 
-export async function loadAllPurchaseItems() {
-    if (!purchaseItemsTableBody) return;
+export async function loadAllPurchaseItems(targetTableBodyId = 'purchaseItemsTableStockPageBody') {
+    const currentTableBody = document.getElementById(targetTableBodyId);
+    if (!currentTableBody) {
+        console.warn(`Тіло таблиці з ID "${targetTableBodyId}" не знайдено для loadAllPurchaseItems.`);
+        return;
+    }
+    if(apiResponseDiv && document.querySelector('#stock.active')) apiResponseDiv.textContent = 'Завантаження всіх партій товарів...'; // Показуємо тільки якщо вкладка Склад активна
+    
+    currentTableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; font-style:italic;">Завантаження партій...</td></tr>`;
     try {
         const items = await fetchAllPurchaseItemsAPI();
-        purchaseItemsTableBody.innerHTML = '';
+        currentTableBody.innerHTML = ''; 
+        if (!items || items.length === 0) {
+            if(apiResponseDiv && document.querySelector('#stock.active')) apiResponseDiv.textContent = 'Список партій товарів порожній.';
+            currentTableBody.innerHTML = `<tr><td colspan="10" style="text-align:center;">Список партій товарів порожній.</td></tr>`;
+            return;
+        }
         items.forEach(item => {
-            const row = purchaseItemsTableBody.insertRow();
+            const row = currentTableBody.insertRow();
             row.innerHTML = `
                 <td>${item.id}</td>
                 <td>${item.purchase_id || 'N/A'}</td>
@@ -324,49 +513,29 @@ export async function loadAllPurchaseItems() {
                 <td>${escapeHTML(item.product_name)}</td>
                 <td>${item.store_id}</td>
                 <td>${escapeHTML(item.store_name)}</td>
-                <td>${item.quantity_initial}</td>
-                <td>${item.quantity_remaining}</td>
+                <td>${parseFloat(item.quantity_initial).toFixed(2)}</td>
+                <td>${parseFloat(item.quantity_remaining).toFixed(2)}</td>
                 <td>${parseFloat(item.price_per_unit_purchase).toFixed(2)}</td>
             `;
         });
-         if (apiResponseDiv) apiResponseDiv.textContent = 'Список всіх партій товарів оновлено.';
+         if (apiResponseDiv && document.querySelector('#stock.active')) apiResponseDiv.textContent = 'Список всіх партій товарів оновлено.';
     } catch (error) {
         console.error('Помилка завантаження всіх партій:', error);
-        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка завантаження всіх партій: ${error.message}`;
-    }
-}
-
-async function viewPurchaseDetails(purchaseId) {
-    try {
-        const purchaseDoc = await fetchPurchaseByIdAPI(purchaseId);
-        let detailsHtml = `<h3>Деталі Закупівлі ID: ${purchaseDoc.id}</h3>
-                           <p>Дата: ${new Date(purchaseDoc.purchase_date).toLocaleDateString('uk-UA')}</p>
-                           <p>Магазин: ${escapeHTML(purchaseDoc.store_name)} (ID: ${purchaseDoc.store_id})</p>
-                           <p>Номер накл.: ${escapeHTML(purchaseDoc.document_number || 'N/A')}</p>
-                           <p>Загальна сума: ${parseFloat(purchaseDoc.total_amount).toFixed(2)}</p>
-                           <h4>Товари:</h4><ul>`;
-        purchaseDoc.items.forEach(item => {
-            detailsHtml += `<li>${escapeHTML(item.product_name)} (ID: ${item.product_id}, ШК: ${escapeHTML(item.product_barcode || 'N/A')}) 
-                              - К-сть: ${item.quantity_initial}, 
-                              Ціна: ${parseFloat(item.price_per_unit_purchase).toFixed(2)}</li>`;
-        });
-        detailsHtml += `</ul>`;
-        if (apiResponseDiv) apiResponseDiv.innerHTML = detailsHtml;
-    } catch (error) {
-        console.error('Помилка завантаження деталей закупівлі:', error);
-        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка завантаження деталей закупівлі: ${error.message}`;
+        if (apiResponseDiv && document.querySelector('#stock.active')) apiResponseDiv.textContent = `Помилка завантаження всіх партій: ${error.message}`;
+        if (currentTableBody) currentTableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:red;">Помилка завантаження даних.</td></tr>`;
     }
 }
 
 export function setupPurchasesTableEventListeners() {
     if (purchasesTableBody) {
         purchasesTableBody.addEventListener('click', (event) => {
-            const button = event.target.closest('button[data-action="view-details"]');
-            if (button) {
-                const purchaseId = button.dataset.id;
-                viewPurchaseDetails(purchaseId);
+            const button = event.target.closest('button');
+            if (!button) return;
+            const action = button.dataset.action;
+            const purchaseId = button.dataset.id;
+            if (action === "view-purchase-details") {
+                openPurchaseModalForView(purchaseId); 
             }
-            // Тут можна буде додати обробник для кнопки "Редагувати документ"
         });
     }
 }

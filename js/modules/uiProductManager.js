@@ -2,8 +2,8 @@
 import { 
     fetchProductsAPI, createProductAPI, updateProductAPI, deleteProductAPI, getProductByIdAPI,
     addProductBarcodeAPI, deleteProductBarcodeAPI,
-    importProductsAPI // Імпорт для функції імпорту товарів
-    // importBarcodesAPI // Для майбутнього імпорту штрихкодів
+    importProductsAPI,
+    fetchProductStockByStoresAPI
 } from './apiService.js';
 
 // Змінні для елементів DOM
@@ -16,30 +16,25 @@ let productsTableBody, apiResponseDiv,
     productSubTabButtons, productSubTabContents, 
     exportProductsBtn, exportBarcodesBtn,
     importProductsFile, processImportProductsBtn,
-    importBarcodesFile, processImportBarcodesBtn;
+    importBarcodesFile, processImportBarcodesBtn,
+    productsPaginationContainer,
+    productStockTableBody, noStockDataMessage;
+
+// Змінні для стану пагінації
+let currentProductPage = 1;
+const productsPerPage = 30; 
+let totalProductPages = 1;
 
 export function initProductControls(responseDivElement) {
     apiResponseDiv = responseDivElement; 
 
     productsTableBody = document.querySelector('#productsTable tbody');
     addNewProductBtn = document.getElementById('addNewProductBtn');
-    productModal = document.getElementById('productModal');
-    productModalTitle = document.getElementById('productModalTitle');
-    closeProductModalBtn = document.getElementById('closeProductModalBtn');
-    cancelProductModalBtn = document.getElementById('cancelProductModalBtn');
-    productModalForm = document.getElementById('productModalForm');
-    modalProductIdInput = document.getElementById('modalProductId');
-    modalProductNameField = document.getElementById('modalProductName');
-    modalProductRetailPriceField = document.getElementById('modalProductRetailPrice');
-    modalProductUnitField = document.getElementById('modalProductUnit');
-    modalMainProductBarcodeField = document.getElementById('modalMainProductBarcode');
-    modalAdditionalBarcodesContainer = document.getElementById('modalAdditionalBarcodesContainer');
-    modalAddAdditionalBarcodeBtn = document.getElementById('modalAddAdditionalBarcodeBtn');
-    modalTabButtons = document.querySelectorAll('#productModal .modal-tabs .modal-tab-button');
-    modalTabContents = document.querySelectorAll('#productModal .modal-tab-content');
+    productsPaginationContainer = document.getElementById('productsPaginationContainer');
+    
+    productSubTabButtons = document.querySelectorAll('.product-subtabs .product-subtab-button');
+    productSubTabContents = document.querySelectorAll('.product-subtab-content');
 
-    productSubTabButtons = document.querySelectorAll('#products .product-subtabs .product-subtab-button');
-    productSubTabContents = document.querySelectorAll('#products .product-subtab-content');
     exportProductsBtn = document.getElementById('exportProductsBtn'); 
     exportBarcodesBtn = document.getElementById('exportBarcodesBtn');
     importProductsFile = document.getElementById('importProductsFile');
@@ -47,73 +42,430 @@ export function initProductControls(responseDivElement) {
     importBarcodesFile = document.getElementById('importBarcodesFile');
     processImportBarcodesBtn = document.getElementById('processImportBarcodesBtn');
 
-    console.log('[uiProductManager] initProductControls called.');
-    
-    if (addNewProductBtn) addNewProductBtn.addEventListener('click', openProductModalForCreate);
-    if (closeProductModalBtn) closeProductModalBtn.addEventListener('click', closeProductModal);
-    if (cancelProductModalBtn) cancelProductModalBtn.addEventListener('click', closeProductModal);
-    if (productModalForm) productModalForm.addEventListener('submit', handleProductModalSubmit);
-    if (modalAddAdditionalBarcodeBtn) modalAddAdditionalBarcodeBtn.addEventListener('click', () => addAdditionalBarcodeRowToModal());
-    
+    productModal = document.getElementById('productModal');
     if (productModal) {
+        productModalTitle = document.getElementById('productModalTitle');
+        closeProductModalBtn = document.getElementById('closeProductModalBtn');
+        cancelProductModalBtn = document.getElementById('cancelProductModalBtn');
+        productModalForm = document.getElementById('productModalForm');
+        modalProductIdInput = document.getElementById('modalProductId');
+        modalProductNameField = document.getElementById('modalProductName');
+        modalProductRetailPriceField = document.getElementById('modalProductRetailPrice');
+        modalProductUnitField = document.getElementById('modalProductUnit');
+        modalMainProductBarcodeField = document.getElementById('modalMainProductBarcode');
+        modalAdditionalBarcodesContainer = document.getElementById('modalAdditionalBarcodesContainer');
+        modalAddAdditionalBarcodeBtn = document.getElementById('modalAddAdditionalBarcodeBtn');
+        modalTabButtons = document.querySelectorAll('#productModal .modal-tabs .modal-tab-button');
+        modalTabContents = document.querySelectorAll('#productModal .modal-tab-content');
+        
+        productStockTableBody = document.getElementById('productStockTableBody');
+        noStockDataMessage = document.getElementById('noStockDataMessage');
+
+        if (closeProductModalBtn) closeProductModalBtn.addEventListener('click', closeProductModal);
+        if (cancelProductModalBtn) cancelProductModalBtn.addEventListener('click', closeProductModal);
+        if (productModalForm) productModalForm.addEventListener('submit', handleProductModalSubmit);
+        if (modalAddAdditionalBarcodeBtn) modalAddAdditionalBarcodeBtn.addEventListener('click', () => addAdditionalBarcodeRowToModal());
+        
         productModal.addEventListener('click', (event) => {
             if (event.target === productModal) closeProductModal();
         });
-    }
-    
-    if (exportProductsBtn) exportProductsBtn.addEventListener('click', handleExportProducts);
-    if (exportBarcodesBtn) exportBarcodesBtn.addEventListener('click', handleExportBarcodes);
-
-    if (processImportProductsBtn && importProductsFile) {
-        processImportProductsBtn.addEventListener('click', () => handleImportFile(importProductsFile, 'products'));
-    }
-    if (processImportBarcodesBtn && importBarcodesFile) {
-        processImportBarcodesBtn.addEventListener('click', () => handleImportFile(importBarcodesFile, 'barcodes'));
-    }
         
-    if (productSubTabButtons && productSubTabContents) {
-        productSubTabButtons.forEach(button => {
+        if (modalTabButtons && modalTabButtons.length > 0) {
+            modalTabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    modalTabButtons.forEach(btn => btn.classList.remove('active'));
+                    modalTabContents.forEach(content => {
+                        if(content) content.classList.remove('active');
+                    });
+                    button.classList.add('active');
+                    const targetModalTabId = button.dataset.modalTab;
+                    const targetModalContent = document.getElementById(targetModalTabId);
+                    if (targetModalContent) targetModalContent.classList.add('active');
+
+                    if (targetModalTabId === 'productStockTab') {
+                        const currentProductId = modalProductIdInput.value;
+                        if (currentProductId) {
+                            loadProductStock(currentProductId);
+                        } else {
+                            if (productStockTableBody) productStockTableBody.innerHTML = '';
+                            if (noStockDataMessage) {
+                                noStockDataMessage.textContent = 'Спочатку збережіть товар, щоб побачити залишки.';
+                                noStockDataMessage.style.display = 'block';
+                            }
+                        }
+                    }
+                });
+            });
+        }
+        if (modalAdditionalBarcodesContainer) setupModalAdditionalBarcodesContainerListeners();
+    } else {
+        console.warn("[uiProductManager] Модальне вікно productModal не знайдено.");
+    }
+
+    console.log('[uiProductManager] initProductControls called.');
+    
+    if (addNewProductBtn) addNewProductBtn.addEventListener('click', openProductModalForCreate);
+        
+    if (productSubTabButtons && productSubTabButtons.length > 0) {
+         productSubTabButtons.forEach(button => {
             button.addEventListener('click', () => {
                 productSubTabButtons.forEach(btn => btn.classList.remove('active'));
-                productSubTabContents.forEach(content => content.classList.remove('active'));
+                document.querySelectorAll('.product-subtab-content').forEach(content => { 
+                    if(content) content.classList.remove('active');
+                });
 
                 button.classList.add('active');
-                const targetSubTabId = button.dataset.productSubtab;
+                const targetSubTabId = button.dataset.productSubtab; 
                 const targetSubContent = document.getElementById(targetSubTabId);
                 if (targetSubContent) {
                     targetSubContent.classList.add('active');
                     if (targetSubTabId === 'productListSubTab') {
-                        if (productsTableBody) loadProducts(); 
+                        currentProductPage = 1; 
+                        if (productsTableBody) loadProducts(currentProductPage); 
+                        else console.warn("productsTableBody не знайдено при активації підвкладки productListSubTab");
+                    } else if (targetSubTabId === 'productImportExportSubTab') {
+                        console.log('Активовано підвкладку Імпорт/Експорт');
                     }
+                } else {
+                    console.warn(`Контент для підвкладки ${targetSubTabId} не знайдено.`);
                 }
             });
         });
-    }
-    
-    if (modalTabButtons && modalTabContents) {
-        modalTabButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                modalTabButtons.forEach(btn => btn.classList.remove('active'));
-                modalTabContents.forEach(content => content.classList.remove('active'));
-                button.classList.add('active');
-                const targetModalTabId = button.dataset.modalTab;
-                const targetModalContent = document.getElementById(targetModalTabId);
-                if (targetModalContent) targetModalContent.classList.add('active');
-            });
-        });
+        const activeSubTabButton = document.querySelector('.product-subtabs .product-subtab-button.active');
+        const productListSubTabButton = document.querySelector('.product-subtabs .product-subtab-button[data-product-subtab="productListSubTab"]');
+
+        if (!activeSubTabButton && productListSubTabButton) {
+             console.log("Симуляція кліку на підвкладку 'Список товарів' для початкової ініціалізації.");
+             productListSubTabButton.click();
+        } else if (activeSubTabButton && activeSubTabButton.dataset.productSubtab === 'productListSubTab') {
+            if (productsTableBody) loadProducts(currentProductPage);
+        }
+    } else if (document.getElementById('productListSubTab') && productsTableBody) { 
+        loadProducts(currentProductPage);
     }
         
     if (productsTableBody) setupProductTableEventListeners(); 
-    if (modalAdditionalBarcodesContainer) setupModalAdditionalBarcodesContainerListeners(); 
+    
+    if (exportProductsBtn) {
+        exportProductsBtn.addEventListener('click', handleExportProducts);
+    } else {
+        console.warn('Кнопка exportProductsBtn не знайдена під час прив\'язки обробника в initProductControls!');
+    }
+    if (exportBarcodesBtn) {
+        exportBarcodesBtn.addEventListener('click', handleExportBarcodes);
+    }
+    
+    if (processImportProductsBtn && importProductsFile) {
+        processImportProductsBtn.addEventListener('click', () => {
+            console.log('Кнопка "processImportProductsBtn" НАТИСНУТА!');
+            handleImportFile(importProductsFile, 'products');
+        });
+    } else {
+        if (!processImportProductsBtn) console.warn('Кнопка processImportProductsBtn не знайдена при спробі прив\'язати обробник в initProductControls!');
+        if (!importProductsFile) console.warn('Елемент importProductsFile не знайдений при спробі прив\'язати обробник в initProductControls!');
+    }
+
+    if (processImportBarcodesBtn && importBarcodesFile) {
+        processImportBarcodesBtn.addEventListener('click', () => {
+            console.log('Кнопка "processImportBarcodesBtn" НАТИСНУТА!');
+            handleImportFile(importBarcodesFile, 'barcodes');
+        });
+    }
+}
+
+export async function loadProducts(page = 1) {
+    console.log(`[uiProductManager] loadProducts викликано для сторінки: ${page}, ліміт: ${productsPerPage}`);
+
+    productsTableBody = document.querySelector('#productsTable tbody'); // Пере-ініціалізація, якщо таблиця була видалена/додана
+    productsPaginationContainer = document.getElementById('productsPaginationContainer');
+    
+    const loadingIndicatorRowId = 'loadingProductsRow';
+    let loadingRow = document.getElementById(loadingIndicatorRowId);
+
+    if (productsTableBody) {
+        productsTableBody.innerHTML = ''; 
+        if (!loadingRow) { 
+            loadingRow = productsTableBody.insertRow(0); 
+            loadingRow.id = loadingIndicatorRowId;
+            const cell = loadingRow.insertCell();
+            cell.colSpan = 6; // ID, Назва, Ціна, Од., Заг.залишок, Дії
+            cell.textContent = 'Завантаження списку товарів...';
+            cell.style.textAlign = 'center';
+            cell.style.padding = '20px';
+            cell.style.fontStyle = 'italic';
+        } else {
+            loadingRow.style.display = ''; 
+        }
+    }
+    if (productsPaginationContainer) productsPaginationContainer.innerHTML = '';
+
+    if (!productsTableBody) { 
+        console.warn("[uiProductManager] productsTableBody не знайдено в loadProducts."); 
+        return; 
+    }
+    if(apiResponseDiv) apiResponseDiv.textContent = `Завантаження списку товарів (сторінка ${page})...`;
+    currentProductPage = page;
+
+    try {
+        const response = await fetchProductsAPI(currentProductPage, productsPerPage); 
+        console.log('[uiProductManager] Відповідь від fetchProductsAPI:', JSON.stringify(response, null, 2));
+
+        loadingRow = document.getElementById(loadingIndicatorRowId); 
+        if (loadingRow) loadingRow.style.display = 'none'; 
+        if (productsTableBody) productsTableBody.innerHTML = ''; 
+
+        if (!response || typeof response !== 'object' || !response.hasOwnProperty('products') || !response.hasOwnProperty('totalPages')) {
+            console.error('[uiProductManager] Некоректна структура відповіді від API або помилка запиту. Відповідь:', response);
+            if (apiResponseDiv) apiResponseDiv.textContent = 'Помилка: Некоректна відповідь від сервера при завантаженні товарів.';
+            if (productsTableBody) productsTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Помилка завантаження даних.</td></tr>`;
+            if (productsPaginationContainer) productsPaginationContainer.innerHTML = '<p>Не вдалося завантажити дані для пагінації.</p>';
+            return;
+        }
+        
+        const products = response.products;
+        totalProductPages = response.totalPages; 
+        const totalProducts = response.totalProducts;
+
+        if (!Array.isArray(products)) {
+            console.error('[uiProductManager] Очікувався масив товарів, але отримано:', products);
+            if (apiResponseDiv) apiResponseDiv.textContent = 'Помилка: Отримано некоректний формат списку товарів.';
+            if (productsTableBody) productsTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Некоректний формат даних.</td></tr>`;
+            renderProductsPagination(totalProductPages || 0, totalProducts || 0);
+            return;
+        }
+
+        if (products.length === 0) {
+            if (apiResponseDiv) apiResponseDiv.textContent = (page > 1) ? `На сторінці ${page} товарів немає.` : 'Список товарів порожній.';
+            if (productsTableBody) productsTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">${(page > 1) ? 'На цій сторінці товарів немає.' : 'Список товарів порожній.'}</td></tr>`;
+            renderProductsPagination(totalProductPages, totalProducts);
+            return;
+        }
+        
+        const productDetailPromises = products.map(async (baseProduct) => {
+            try {
+                const detailedInfo = await getProductByIdAPI(baseProduct.id);
+                return { 
+                    ...detailedInfo, 
+                    total_stock_remaining: baseProduct.total_stock_remaining 
+                };
+            } catch (e) {
+                console.warn(`Не вдалося завантажити деталі ШК для товару ID ${baseProduct.id}: ${e.message}`);
+                return { 
+                    ...baseProduct, 
+                    barcodes: [] 
+                };
+            }
+        });
+        const detailedProducts = await Promise.all(productDetailPromises);
+
+        detailedProducts.forEach(product => {
+            const row = productsTableBody.insertRow();
+            const retailPriceFormatted = parseFloat(product.retail_price).toFixed(2);
+            // const additionalBarcodesCount - розрахунок видалено, так як колонка прихована
+            
+            const stockValue = parseFloat(product.total_stock_remaining);
+            const totalStockDisplay = (!isNaN(stockValue) && stockValue > 0) ? stockValue.toFixed(2) : '-';
+
+            // console.log(`Товар ID ${product.id}: total_stock_remaining = ${product.total_stock_remaining}, totalStockDisplay = ${totalStockDisplay}`);
+
+            row.innerHTML = `
+                <td>${product.id}</td>
+                <td class="product-name-clickable" data-id="${product.id}" style="cursor:pointer; color:blue; text-decoration:underline;">${escapeHTML(product.name)}</td>
+                <td>${retailPriceFormatted}</td>
+                <td>${escapeHTML(product.unit || 'шт')}</td>
+                <td>${totalStockDisplay}</td>
+                <td>
+                    <button class="delete-btn product-delete-action" data-action="delete" data-id="${product.id}" title="Видалити товар" style="padding: 5px 8px; font-size: 1.1em; background: transparent; border: none; color: #dc3545;">✖</button>
+                </td>`;
+        });
+
+        if (apiResponseDiv) apiResponseDiv.textContent = `Список товарів оновлено (сторінка ${currentProductPage} з ${totalProductPages}). Загалом: ${totalProducts}.`;
+        renderProductsPagination(totalProductPages, totalProducts);
+
+    } catch (error) {
+        const loadingRowOnError = document.getElementById(loadingIndicatorRowId);
+        if (loadingRowOnError) loadingRowOnError.style.display = 'none';
+        if (productsTableBody) productsTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Помилка завантаження товарів.</td></tr>`;
+
+        console.error('[uiProductManager] Помилка в loadProducts:', error);
+        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка завантаження товарів: ${error.message}`;
+        if (productsPaginationContainer) productsPaginationContainer.innerHTML = '<p style="color:red;">Помилка завантаження пагінації через помилку даних.</p>';
+    }
+}
+
+function renderProductsPagination(totalPages, totalProducts) {
+    productsPaginationContainer = document.getElementById('productsPaginationContainer');
+    if (!productsPaginationContainer) {
+        console.warn("[uiProductManager] Контейнер пагінації #productsPaginationContainer не знайдено під час рендерингу.");
+        return;
+    }
+    productsPaginationContainer.innerHTML = ''; 
+
+    if (totalPages <= 0 && totalProducts === 0) {
+        productsPaginationContainer.innerHTML = (totalProducts === 0 && currentProductPage === 1) ? '<p>Список товарів порожній.</p>' :'<p>Немає товарів для відображення на цій сторінці.</p>';
+        return;
+    }
+     if (totalPages === 1 && totalProducts > 0 && totalProducts <= productsPerPage) {
+         const infoSpanSolo = document.createElement('div');
+         infoSpanSolo.innerHTML = `Всього товарів: ${totalProducts}`;
+         productsPaginationContainer.appendChild(infoSpanSolo);
+         return;
+    }
+    
+    const infoSpan = document.createElement('div');
+    infoSpan.id = 'productPageInfo';
+    infoSpan.innerHTML = `Сторінка <strong>${currentProductPage}</strong> з ${totalPages} (Всього товарів: ${totalProducts})`;
+    infoSpan.style.margin = "0 10px";
+    infoSpan.style.marginBottom = "10px";
+
+    const prevButton = document.createElement('button');
+    prevButton.id = 'prevProductPageBtn';
+    prevButton.innerHTML = '« Попередня';
+    prevButton.disabled = currentProductPage === 1;
+    prevButton.classList.add('button', 'secondary-btn'); 
+    prevButton.addEventListener('click', () => {
+        if (currentProductPage > 1) {
+            loadProducts(currentProductPage - 1);
+        }
+    });
+
+    const nextButton = document.createElement('button');
+    nextButton.id = 'nextProductPageBtn';
+    nextButton.innerHTML = 'Наступна »';
+    nextButton.disabled = currentProductPage === totalPages;
+    nextButton.classList.add('button', 'secondary-btn'); 
+    nextButton.addEventListener('click', () => {
+        if (currentProductPage < totalPages) {
+            loadProducts(currentProductPage + 1);
+        }
+    });
+    
+    const buttonsWrapper = document.createElement('div');
+    buttonsWrapper.style.marginBottom = "10px";
+    buttonsWrapper.appendChild(prevButton);
+    buttonsWrapper.appendChild(infoSpan); 
+    buttonsWrapper.appendChild(nextButton);
+    
+    productsPaginationContainer.appendChild(buttonsWrapper);
+
+    const pageNumbersDiv = document.createElement('div');
+    pageNumbersDiv.id = 'productPageNumbers';
+    pageNumbersDiv.style.marginTop = '5px';
+
+    const maxPagesToShow = 5; 
+    let startPage, endPage;
+    if (totalPages <= maxPagesToShow) {
+        startPage = 1; endPage = totalPages;
+    } else {
+        const maxPagesBeforeCurrentPage = Math.floor(maxPagesToShow / 2);
+        const maxPagesAfterCurrentPage = Math.ceil(maxPagesToShow / 2) - 1;
+        if (currentProductPage <= maxPagesBeforeCurrentPage) {
+            startPage = 1; endPage = maxPagesToShow;
+        } else if (currentProductPage + maxPagesAfterCurrentPage >= totalPages) {
+            startPage = totalPages - maxPagesToShow + 1; endPage = totalPages;
+        } else {
+            startPage = currentProductPage - maxPagesBeforeCurrentPage; endPage = currentProductPage + maxPagesAfterCurrentPage;
+        }
+    }
+    
+    if (startPage > 1) {
+        const firstPageButton = document.createElement('button');
+        firstPageButton.textContent = '1';
+        firstPageButton.classList.add('page-number-btn');
+        firstPageButton.dataset.page = 1;
+        firstPageButton.addEventListener('click', (e) => loadProducts(parseInt(e.target.dataset.page)));
+        pageNumbersDiv.appendChild(firstPageButton);
+        if (startPage > 2) {
+            const dots = document.createElement('span'); dots.textContent = ' ... '; dots.style.margin = "0 5px";
+            pageNumbersDiv.appendChild(dots);
+        }
+    }
+    for (let i = startPage; i <= endPage; i++) {
+        const pageButton = document.createElement('button');
+        pageButton.textContent = i;
+        pageButton.classList.add('page-number-btn');
+        if (i === currentProductPage) {
+            pageButton.classList.add('active'); pageButton.disabled = true;
+        }
+        pageButton.dataset.page = i;
+        pageButton.addEventListener('click', (e) => loadProducts(parseInt(e.target.dataset.page)));
+        pageNumbersDiv.appendChild(pageButton);
+    }
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const dots = document.createElement('span'); dots.textContent = ' ... '; dots.style.margin = "0 5px";
+            pageNumbersDiv.appendChild(dots);
+        }
+        const lastPageButton = document.createElement('button');
+        lastPageButton.textContent = totalPages;
+        lastPageButton.classList.add('page-number-btn');
+        lastPageButton.dataset.page = totalPages;
+        lastPageButton.addEventListener('click', (e) => loadProducts(parseInt(e.target.dataset.page)));
+        pageNumbersDiv.appendChild(lastPageButton);
+    }
+    productsPaginationContainer.appendChild(pageNumbersDiv);
+}
+
+
+async function loadProductStock(productId) {
+    productStockTableBody = document.getElementById('productStockTableBody');
+    noStockDataMessage = document.getElementById('noStockDataMessage');
+
+    if (!productStockTableBody || !noStockDataMessage) {
+        console.warn("[uiProductManager] Елементи для вкладки 'Залишки' (#productStockTableBody, #noStockDataMessage) не знайдені при виклику loadProductStock.");
+        return;
+    }
+    productStockTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Завантаження залишків...</td></tr>';
+    noStockDataMessage.style.display = 'none';
+
+    try {
+        const stockData = await fetchProductStockByStoresAPI(productId);
+        productStockTableBody.innerHTML = ''; 
+
+        if (!stockData || stockData.length === 0) {
+            noStockDataMessage.textContent = 'Для цього товару немає даних про залишки на складах.';
+            noStockDataMessage.style.display = 'block';
+            return;
+        }
+
+        stockData.forEach(item => {
+            const row = productStockTableBody.insertRow();
+            const purchaseDate = new Date(item.purchase_date).toLocaleDateString('uk-UA');
+            row.innerHTML = `
+                <td>${escapeHTML(item.store_name)} (ID: ${item.store_id})</td>
+                <td>${purchaseDate}</td>
+                <td>${parseFloat(item.quantity_initial).toFixed(2)}</td>
+                <td>${parseFloat(item.quantity_remaining).toFixed(2)}</td>
+                <td>${parseFloat(item.price_per_unit_purchase).toFixed(2)}</td>
+                <td>${item.purchase_item_id}</td>
+            `;
+        });
+
+    } catch (error) {
+        console.error(`Помилка завантаження залишків для товару ID ${productId}:`, error);
+        productStockTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Помилка завантаження залишків: ${error.message}</td></tr>`;
+        noStockDataMessage.style.display = 'none';
+    }
 }
 
 function openProductModalForCreate() {
     if(!productModalTitle || !productModalForm || !modalProductIdInput || !modalAdditionalBarcodesContainer || !modalProductNameField || !productModal) {
         console.error("Елементи модального вікна не ініціалізовані для створення товару."); return;
     }
-    productModalTitle.textContent = 'Додати Новий Товар'; productModalForm.reset(); 
-    modalProductIdInput.value = ''; modalAdditionalBarcodesContainer.innerHTML = ''; 
-    activateModalTab('productMainInfoTab'); productModal.style.display = 'block';
+    productModalTitle.textContent = 'Додати Новий Товар'; 
+    productModalForm.reset(); 
+    modalProductIdInput.value = ''; 
+    modalAdditionalBarcodesContainer.innerHTML = ''; 
+    
+    productStockTableBody = document.getElementById('productStockTableBody'); 
+    noStockDataMessage = document.getElementById('noStockDataMessage');     
+    if (productStockTableBody) productStockTableBody.innerHTML = '';
+    if (noStockDataMessage) {
+        noStockDataMessage.textContent = 'Залишки будуть доступні після збереження товару.';
+        noStockDataMessage.style.display = 'block';
+    }
+    activateModalTab('productMainInfoTab');
+    productModal.style.display = 'block';
     if(modalProductNameField) modalProductNameField.focus();
 }
 
@@ -122,11 +474,20 @@ async function openProductModalForEdit(productId) {
        !modalProductNameField || !modalProductRetailPriceField || !modalProductUnitField || !modalMainProductBarcodeField || !productModal) {
         console.error("Елементи модального вікна не ініціалізовані для редагування товару."); return;
     }
-    productModalTitle.textContent = 'Редагувати Товар'; productModalForm.reset();
-    modalAdditionalBarcodesContainer.innerHTML = ''; activateModalTab('productMainInfoTab'); 
+    productModalTitle.textContent = 'Редагувати Товар'; 
+    productModalForm.reset();
+    modalAdditionalBarcodesContainer.innerHTML = ''; 
+    
+    productStockTableBody = document.getElementById('productStockTableBody'); 
+    noStockDataMessage = document.getElementById('noStockDataMessage');     
+    if (productStockTableBody) productStockTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Оберіть вкладку "Залишки" для завантаження.</td></tr>';
+    if (noStockDataMessage) noStockDataMessage.style.display = 'none';
+
+    activateModalTab('productMainInfoTab');
+
     try {
         const product = await getProductByIdAPI(productId);
-        modalProductIdInput.value = product.id;
+        modalProductIdInput.value = product.id; 
         modalProductNameField.value = decodeHTML(product.name);
         modalProductRetailPriceField.value = parseFloat(product.retail_price).toFixed(2);
         modalProductUnitField.value = decodeHTML(product.unit || 'шт');
@@ -146,34 +507,21 @@ async function openProductModalForEdit(productId) {
 function closeProductModal() { if(productModal) productModal.style.display = 'none'; }
 
 function activateModalTab(tabId) { 
-    if (!modalTabButtons || !modalTabContents) return;
-    modalTabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.modalTab === tabId));
-    modalTabContents.forEach(content => { if(content) content.classList.toggle('active', content.id === tabId); });
-}
+    modalTabButtons = document.querySelectorAll('#productModal .modal-tabs .modal-tab-button'); 
+    modalTabContents = document.querySelectorAll('#productModal .modal-tab-content'); 
 
-export async function loadProducts() {
-    if (!productsTableBody) { console.warn("[uiProductManager] productsTableBody не знайдено в loadProducts."); return; }
-    if(apiResponseDiv) apiResponseDiv.textContent = "Завантаження списку товарів...";
-    try {
-        const products = await fetchProductsAPI(); 
-        productsTableBody.innerHTML = '';
-        if (!products || products.length === 0) { if (apiResponseDiv) apiResponseDiv.textContent = 'Список товарів порожній.'; return; }
-        const productDetailPromises = products.map(product => getProductByIdAPI(product.id).catch(e => {
-            console.warn(`Не вдалося завантажити деталі ШК для товару ID ${product.id}: ${e.message}`);
-            return { ...product, barcodes: [] }; 
-        }));
-        const detailedProducts = await Promise.all(productDetailPromises);
-        detailedProducts.forEach(product => {
-            const row = productsTableBody.insertRow();
-            const retailPriceFormatted = parseFloat(product.retail_price).toFixed(2);
-            const additionalBarcodesCount = product.barcodes ? product.barcodes.filter(b => b.description !== 'Основний штрихкод (з картки товару)').length : 0;
-            row.innerHTML = `<td>${product.id}</td><td>${escapeHTML(product.name)}</td><td>${escapeHTML(product.barcode || '')}</td><td>${retailPriceFormatted}</td><td>${escapeHTML(product.unit || 'шт')}</td><td>${additionalBarcodesCount}</td><td><button class="edit-btn" data-action="edit" data-id="${product.id}">Ред.</button><button class="delete-btn" data-action="delete" data-id="${product.id}">Вид.</button></td>`;
-        });
-        if (apiResponseDiv) apiResponseDiv.textContent = 'Список товарів оновлено.';
-    } catch (error) {
-        console.error('Помилка завантаження товарів:', error);
-        if (apiResponseDiv) apiResponseDiv.textContent = `Помилка завантаження товарів: ${error.message}`;
+    if (!modalTabButtons || !modalTabContents || modalTabButtons.length === 0 || modalTabContents.length === 0) {
+        console.warn("Кнопки або контент вкладок модального вікна не знайдені для activateModalTab (можливо, модалка ще не в DOM або IDs неправильні).");
+        return;
     }
+    modalTabButtons.forEach(btn => btn.classList.remove('active'));
+    modalTabContents.forEach(content => { if(content) content.classList.remove('active'); });
+    
+    const activeButton = document.querySelector(`#productModal .modal-tab-button[data-modal-tab="${tabId}"]`);
+    const activeContent = document.getElementById(tabId);
+
+    if(activeButton) activeButton.classList.add('active');
+    if(activeContent) activeContent.classList.add('active');
 }
 
 function addAdditionalBarcodeRowToModal(barcode = { id: null, barcode_value: '', description: '' }) {
@@ -212,6 +560,7 @@ async function handleProductModalSubmit(event) {
         }
     });
     if (!id) productData.barcodesArray = barcodesArray;
+    
     try {
         let resultMessage = ''; let savedProduct;
         if (id) { 
@@ -223,7 +572,8 @@ async function handleProductModalSubmit(event) {
             resultMessage = `Товар "${savedProduct.name}" створено.`;
         }
         if (apiResponseDiv) apiResponseDiv.textContent = resultMessage;
-        closeProductModal(); loadProducts();
+        closeProductModal();
+        loadProducts(currentProductPage);
     } catch (error) {
         console.error('Помилка збереження товару:', error);
         if (apiResponseDiv) apiResponseDiv.textContent = `Помилка збереження товару: ${error.message}`;
@@ -252,7 +602,13 @@ async function handleDeleteProductRow(id) {
     try {
         const result = await deleteProductAPI(id);
         if (apiResponseDiv) apiResponseDiv.textContent = result.message || `Товар ID: ${id} видалено.`;
-        loadProducts();
+        
+        const currentTableRows = productsTableBody ? productsTableBody.rows.length : 0;
+        if (currentTableRows === 1 && currentProductPage > 1 && totalProductPages > 1) { 
+            loadProducts(currentProductPage - 1);
+        } else {
+            loadProducts(currentProductPage);
+        }
     } catch (error) {
         console.error('Помилка видалення товару:', error);
         if (apiResponseDiv) apiResponseDiv.textContent = `Помилка видалення товару: ${error.message}`;
@@ -262,11 +618,23 @@ async function handleDeleteProductRow(id) {
 export function setupProductTableEventListeners() {
     if (productsTableBody) {
         productsTableBody.addEventListener('click', (event) => {
-            const button = event.target.closest('button');
-            if (!button) return;
-            const action = button.dataset.action; const id = button.dataset.id;
-            if (action === 'edit') openProductModalForEdit(id);
-            else if (action === 'delete') handleDeleteProductRow(id);
+            const target = event.target;
+            
+            if (target.classList.contains('product-name-clickable')) {
+                const productId = target.dataset.id;
+                if (productId) {
+                    openProductModalForEdit(productId);
+                }
+            }
+
+            const deleteButton = target.closest('.product-delete-action'); 
+            if (deleteButton) {
+                const action = deleteButton.dataset.action;
+                const id = deleteButton.dataset.id;
+                if (action === 'delete') {
+                    handleDeleteProductRow(id);
+                }
+            }
         });
     }
 }
@@ -297,20 +665,50 @@ function setupModalAdditionalBarcodesContainerListeners() {
     }
 }
 
-async function handleExportProducts() {
+async function handleExportProducts() { 
     if(apiResponseDiv) apiResponseDiv.textContent = "Підготовка даних для експорту товарів...";
     try {
-        const products = await fetchProductsAPI(); 
-        if (!products || products.length === 0) {
+        let allProducts = [];
+        let currentPageToFetch = 1;
+        let totalPagesToFetch = 1;
+        let fetchedProductsCount = 0;
+
+        if(apiResponseDiv) apiResponseDiv.textContent = "Завантаження всіх товарів для експорту...";
+        
+        const initialPageData = await fetchProductsAPI(1, 1); 
+        if (initialPageData && initialPageData.totalPages) {
+            totalPagesToFetch = initialPageData.totalPages;
+        } else {
+            console.warn("Не вдалося визначити загальну кількість сторінок для експорту.");
+            if(apiResponseDiv) apiResponseDiv.textContent = "Помилка: не вдалося визначити загальну кількість сторінок для експорту.";
+            alert("Не вдалося отримати інформацію про загальну кількість сторінок. Експорт може бути неповним.");
+            return;
+        }
+
+        for (currentPageToFetch = 1; currentPageToFetch <= totalPagesToFetch; currentPageToFetch++) {
+            if(apiResponseDiv) apiResponseDiv.textContent = `Експорт: завантаження сторінки ${currentPageToFetch} з ${totalPagesToFetch}...`;
+            const pageData = await fetchProductsAPI(currentPageToFetch, productsPerPage);
+            if (pageData && pageData.products) {
+                allProducts = allProducts.concat(pageData.products);
+                fetchedProductsCount += pageData.products.length;
+            } else {
+                console.warn(`Проблеми при завантаженні сторінки ${currentPageToFetch} для експорту.`);
+                break; 
+            }
+        }
+        if(apiResponseDiv) apiResponseDiv.textContent = `Завантажено ${fetchedProductsCount} товарів. Підготовка файлу...`;
+
+        if (allProducts.length === 0) {
             alert("Немає товарів для експорту.");
             if(apiResponseDiv) apiResponseDiv.textContent = "Немає товарів для експорту."; return;
         }
-        const dataToExport = products.map(p => ({
-            'ID': p.id, 'Назва Товару': p.name, 'Основний ШК': p.barcode || '',
+        const dataToExport = allProducts.map(p => ({
+            'ID': p.id, 
+            'Назва Товару': p.name, 
+            'Основний ШК': p.barcode || '',
             'Роздрібна Ціна': parseFloat(p.retail_price).toFixed(2),
             'Одиниця Виміру': p.unit || 'шт',
-            'Дата Створення': p.created_at ? new Date(p.created_at).toLocaleString('uk-UA') : '',
-            'Дата Оновлення': p.updated_at ? new Date(p.updated_at).toLocaleString('uk-UA') : ''
+            'Загальний Залишок': p.total_stock_remaining ? parseFloat(p.total_stock_remaining).toFixed(2) : '0.00'
         }));
         exportToExcel(dataToExport, "Список_Товарів");
         if(apiResponseDiv) apiResponseDiv.textContent = "Список товарів успішно експортовано.";
@@ -320,196 +718,9 @@ async function handleExportProducts() {
         alert(`Помилка експорту товарів: ${error.message}`);
     }
 }
-
-async function handleExportBarcodes() {
-    if(apiResponseDiv) apiResponseDiv.textContent = "Підготовка даних для експорту штрихкодів...";
-    try {
-        const products = await fetchProductsAPI();
-        if (!products || products.length === 0) {
-            alert("Немає товарів, для яких можна було б експортувати штрихкоди.");
-            if(apiResponseDiv) apiResponseDiv.textContent = "Немає товарів для експорту штрихкодів."; return;
-        }
-        let allBarcodesData = [];
-        const productDetailPromises = products.map(p => getProductByIdAPI(p.id));
-        const detailedProducts = await Promise.all(productDetailPromises.map(p => p.catch(e => {
-            console.warn(`Помилка завантаження деталей товару ID ${e.id || 'unknown'} для експорту ШК: ${e.message}`);
-            return null; 
-        })));
-        detailedProducts.forEach(detailedProduct => {
-            if (detailedProduct && detailedProduct.barcodes && detailedProduct.barcodes.length > 0) {
-                detailedProduct.barcodes.forEach(bc => {
-                    allBarcodesData.push({
-                        'ID Товару': detailedProduct.id, 'Назва Товару': detailedProduct.name,
-                        'ID Штрихкоду (в таблиці barcodes)': bc.id,
-                        'Значення Штрихкоду': bc.barcode_value,
-                        'Опис Штрихкоду': bc.description || ''
-                    });
-                });
-            }
-        });
-        if (allBarcodesData.length === 0) {
-            alert("Не знайдено штрихкодів для експорту.");
-            if(apiResponseDiv) apiResponseDiv.textContent = "Не знайдено штрихкодів для експорту."; return;
-        }
-        exportToExcel(allBarcodesData, "Список_Штрихкодів");
-        if(apiResponseDiv) apiResponseDiv.textContent = "Список штрихкодів успішно експортовано.";
-    } catch (error) {
-        console.error("Помилка експорту штрихкодів:", error);
-        if(apiResponseDiv) apiResponseDiv.textContent = `Помилка експорту штрихкодів: ${error.message}`;
-        alert(`Помилка експорту штрихкодів: ${error.message}`);
-    }
-}
-
-function exportToExcel(data, fileName) {
-    if (typeof XLSX === 'undefined') {
-        console.error("Бібліотека XLSX (SheetJS) не завантажена!");
-        alert("Помилка: Бібліотека для експорту в Excel не завантажена."); return;
-    }
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Дані");
-    const colWidths = [];
-    if (data.length > 0) {
-        const headers = Object.keys(data[0]);
-        headers.forEach((header, i) => {
-            let maxLength = header.length;
-            data.forEach(row => {
-                const cellValue = row[header] ? String(row[header]) : "";
-                if (cellValue.length > maxLength) maxLength = cellValue.length;
-            });
-            colWidths[i] = { wch: maxLength + 2 }; 
-        });
-        worksheet['!cols'] = colWidths;
-    }
-    XLSX.writeFile(workbook, `${fileName}_${new Date().toISOString().slice(0,10)}.xlsx`);
-}
-
-async function handleImportFile(fileInputElement, importType) {
-    if (!fileInputElement || !fileInputElement.files || !fileInputElement.files.length) {
-        alert("Будь ласка, оберіть файл для імпорту.");
-        if(fileInputElement) fileInputElement.value = ''; // Очищаємо, щоб можна було вибрати той самий файл знову
-        return;
-    }
-    const file = fileInputElement.files[0];
-    const reader = new FileReader();
-
-    reader.onload = async function(event) {
-        const data = event.target.result;
-        try {
-            const workbook = XLSX.read(data, { type: 'binary' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            // header: 1 - отримуємо масив масивів
-            // raw: false - форматуємо дати та числа як рядки (як вони виглядають в Excel)
-            // dateNF: 'yyyy-mm-dd' - якщо є дати, вказуємо формат (хоча для товарів у вас дат немає)
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
-
-            if (jsonData.length < 2) { // Має бути хоча б рядок заголовків і один рядок даних
-                alert("Файл порожній або містить тільки заголовки.");
-                if (apiResponseDiv) apiResponseDiv.textContent = "Помилка: Файл для імпорту порожній.";
-                if(fileInputElement) fileInputElement.value = '';
-                return;
-            }
-
-            const headers = jsonData[0].map(h => String(h).trim()); // Перший рядок - заголовки
-            const dataRows = jsonData.slice(1).map(rowArray => { // Решта - дані
-                let obj = {};
-                headers.forEach((header, index) => {
-                    const cellValue = rowArray[index];
-                    // Обробляємо порожні значення, щоб вони стали null
-                    obj[header] = (cellValue === null || cellValue === undefined || String(cellValue).trim() === '') ? null : String(cellValue).trim();
-                });
-                return obj;
-            }).filter(obj => Object.values(obj).some(val => val !== null)); // Видаляємо повністю порожні рядки Excel
-
-            if (dataRows.length === 0) {
-                alert("У файлі не знайдено даних для імпорту (після видалення порожніх рядків).");
-                if (apiResponseDiv) apiResponseDiv.textContent = "Помилка: У файлі не знайдено даних для імпорту.";
-                if(fileInputElement) fileInputElement.value = '';
-                return;
-            }
-
-            // --- Перетворення ключів для відповідності очікуванням backend ---
-            const mappedDataRows = dataRows.map(row => {
-                const mappedRow = {
-                    // Ключі зліва - ті, що очікує backend (productController.js)
-                    // Значення справа - отримуємо з об'єкта row, використовуючи заголовки Excel як ключі
-                    name: row["Назва Товару"] || null,
-                    retail_price: row["Роздрібна Ціна"], // Backend сам обробить конвертацію в число та перевірку
-                    unit: row["Одиниця Виміру"] || null,   // Backend встановить 'шт', якщо тут буде null
-                    barcode: row["Основний ШК"] || null,
-                    id: row["ID"] || null                 // Backend сам зробить parseInt, якщо значення є
-                };
-                return mappedRow;
-            }).filter(row => row.name && (row.retail_price !== null && row.retail_price !== undefined)); // Додаткова фільтрація: основні поля мають бути
-
-            if (mappedDataRows.length === 0) {
-                 alert("Після перевірки, у файлі не знайдено валідних даних для імпорту (наприклад, відсутня 'Назва Товару' або 'Роздрібна Ціна' у всіх рядках).");
-                 if (apiResponseDiv) apiResponseDiv.textContent = "Помилка: Немає валідних даних для імпорту після мапінгу.";
-                 if(fileInputElement) fileInputElement.value = '';
-                 return;
-            }
-            // --- Кінець перетворення ключів ---
-
-            if (apiResponseDiv) apiResponseDiv.textContent = `Обробка імпорту (${importType})... Кількість рядків для надсилання: ${mappedDataRows.length}`;
-
-            if (importType === 'products') {
-                console.log("Дані для імпорту товарів (після перетворення ключів) надсилаються на сервер:", mappedDataRows);
-                try {
-                    const result = await importProductsAPI(mappedDataRows); // Надсилаємо ПЕРЕТВОРЕНІ дані
-                    
-                    // Обробляємо відповідь від сервера (productController.js -> importProducts)
-                    let feedbackMessage = result.message || `Імпорт завершено.`;
-                    
-                    if (result.importedCount !== undefined || result.updatedCount !== undefined || result.errorCount !== undefined) {
-                        feedbackMessage += ` Імпортовано: ${result.importedCount || 0}, Оновлено: ${result.updatedCount || 0}, Помилок: ${result.errorCount || 0}.`;
-                    }
-
-                    if (result.errors && result.errors.length > 0) {
-                        console.warn("Помилки під час імпорту товарів з сервера:", result.errors);
-                        let errorDetails = "\nДеталі помилок на сервері:\n";
-                        result.errors.forEach(err => {
-                            // err має поля: product_name (або product_id), error
-                            errorDetails += `- Товар: ${err.product_name || ('ID: ' + err.product_id) || 'Невідомий товар'}, Помилка: ${err.error}\n`;
-                        });
-                        feedbackMessage += errorDetails;
-                        if(apiResponseDiv) apiResponseDiv.innerHTML = escapeHTML(feedbackMessage).replace(/\n/g, '<br>');
-                    } else {
-                         if(apiResponseDiv) apiResponseDiv.textContent = feedbackMessage;
-                    }
-                    // Обмежуємо довжину alert, щоб уникнути занадто великих повідомлень
-                    alert(feedbackMessage.substring(0, 600) + (feedbackMessage.length > 600 ? "..." : ""));
-
-                    loadProducts(); // Оновлюємо список товарів на сторінці
-                } catch (apiError) {
-                    // apiError.message тут буде тим, що кинув apiService 
-                    // (тобто message з JSON-відповіді сервера, якщо помилка 400/500 від importProducts)
-                    console.error("Помилка API при імпорті товарів:", apiError);
-                    const errorMessage = apiError.message || (typeof apiError === 'string' ? apiError : 'Невідома помилка API');
-                    alert(`Помилка API при імпорті товарів: ${errorMessage}`);
-                    if (apiResponseDiv) apiResponseDiv.textContent = `Помилка API: ${errorMessage}`;
-                }
-            } else if (importType === 'barcodes') {
-                // Логіка для імпорту штрихкодів (поки не реалізовано на бекенді)
-                // Якщо будете реалізовувати, також знадобиться перетворення ключів для `mappedDataRows`
-                console.log("Дані для імпорту штрихкодів (поки без перетворення):", dataRows);
-                alert(`Імпорт штрихкодів: ${dataRows.length} рядків. Функціонал API для штрихкодів ще не реалізовано.`);
-            }
-            if(fileInputElement) fileInputElement.value = ''; // Очищуємо інпут файлу після спроби імпорту
-        } catch (e) {
-            console.error("Помилка читання або обробки файлу Excel:", e);
-            alert("Помилка при обробці файлу. Перевірте формат файлу та дані.");
-            if (apiResponseDiv) apiResponseDiv.textContent = `Помилка обробки файлу: ${e.message}`;
-            if(fileInputElement) fileInputElement.value = '';
-        }
-    };
-    reader.onerror = function() {
-        alert("Не вдалося прочитати файл.");
-        if (apiResponseDiv) apiResponseDiv.textContent = "Помилка: Не вдалося прочитати файл.";
-        if(fileInputElement) fileInputElement.value = '';
-    };
-    reader.readAsBinaryString(file);
-}
+async function handleExportBarcodes() { /* ... (ваш код, можливо, теж потребує завантаження всіх товарів/штрихкодів) ... */ }
+function exportToExcel(data, fileName) { /* ... (ваш код) ... */ }
+async function handleImportFile(fileInputElement, importType) { /* ... (ваш код, як був виправлений раніше) ... */ }
 
 function escapeHTML(str) {
     if (str === null || str === undefined) return '';
@@ -520,7 +731,7 @@ function escapeHTML(str) {
             case '<': return '<';
             case '>': return '>';
             case '"': return '"';
-            case '\'': return '\'';
+            case "\'": return '\'';
             default: return match;
         }
     });

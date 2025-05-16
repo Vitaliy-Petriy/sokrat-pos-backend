@@ -1,0 +1,31 @@
+<!-- partials/stock.html -->
+<h2>Склад / Всі Партії Товарів</h2>
+<div class="container">
+    <button type="button" id="fetchAllPurchaseItemsBtnStockPage" style="margin-bottom: 15px;">Оновити список всіх партій</button>
+    <table id="purchaseItemsTableStockPage">
+        <thead>
+            <tr>
+                <th>ID Партії</th>
+                <th>ID Док. Закуп.</th>
+                <th>Дата Закуп.</th>
+                <th>ID Товару</th>
+                <th>Назва Товару</th>
+                <th>ID Магазину</th>
+                <th>Назва Магазину</th>
+                <th>Поч. К-сть</th>
+                <th>Залишок</th>
+                <th>Ціна закуп.</th>
+            </tr>
+        </thead>
+        <tbody id="purchaseItemsTableStockPageBody">
+            <!-- Рядки з партіями товарів будуть завантажені сюди JavaScript-ом -->
+            <!-- Приклад рядка (для візуальної перевірки, якщо JS не спрацює):
+            <tr>
+                <td colspan="10" style="text-align:center; font-style:italic;">
+                    Завантаження даних або тут буде список партій...
+                </td>
+            </tr>
+            -->
+        </tbody>
+    </table>
+</div>

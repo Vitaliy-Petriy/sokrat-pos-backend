@@ -1,0 +1,34 @@
+<!-- partials/stores.html -->
+<h2>Магазини</h2>
+<div class="container" style="box-shadow: none; padding-top: 0;"> <!-- Цей .container можна залишити, він групує елементи вкладки -->
+    <button type="button" id="addNewStoreBtn" style="margin-bottom: 20px;">+ Додати новий магазин</button>
+    <h3>Список Магазинів:</h3>
+    <table id="storesTable">
+        <thead><tr><th>ID</th><th>Назва</th><th>Адреса</th><th>Дії</th></tr></thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Модальне вікно для Магазинів -->
+<div id="storeModal" class="modal"> <!-- Залишаємо модалку тут, бо вона специфічна для магазинів -->
+    <div class="modal-content">
+        <span id="closeStoreModalBtn" class="modal-close-btn">×</span>
+        <div class="modal-header">
+            <h2 id="storeModalTitle">Додати Магазин</h2>
+        </div>
+        <form id="storeModalForm">
+            <input type="hidden" id="modalStoreId">
+            <div>
+                <label for="modalStoreName">Назва магазину:</label>
+                <input type="text" id="modalStoreName" required>
+            </div>
+            <div>
+                <label for="modalStoreAddress">Адреса (опціонально):</label>
+                <input type="text" id="modalStoreAddress">
+            </div>
+            <hr style="margin-top: 20px;">
+            <button type="submit">Зберегти</button>
+            <button type="button" id="cancelStoreModalBtn" class="secondary-btn">Скасувати</button>
+        </form>
+    </div>
+</div>

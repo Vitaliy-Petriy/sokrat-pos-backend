@@ -1,0 +1,55 @@
+<!-- partials/users.html -->
+<h2>Користувачі / Касири</h2>
+<div class="container" style="box-shadow: none; padding-top: 0;">
+    <button type="button" id="addNewUserBtn" style="margin-bottom: 20px;">+ Додати нового користувача</button>
+    <h3>Список Користувачів:</h3>
+    <table id="usersTable">
+        <thead><tr><th>ID</th><th>Логін</th><th>ПІБ</th><th>ID Магазину</th><th>Роль</th><th>Активний</th><th>Дії</th></tr></thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Модальне вікно для Користувачів -->
+<div id="userModal" class="modal">
+    <div class="modal-content">
+        <span id="closeUserModalBtn" class="modal-close-btn">×</span>
+        <div class="modal-header">
+            <h2 id="userModalTitle">Додати Користувача</h2>
+        </div>
+        <form id="userModalForm">
+            <input type="hidden" id="modalUserId">
+            <div>
+                <label for="modalUserUsername">Логін (username):</label>
+                <input type="text" id="modalUserUsername" required>
+            </div>
+            <div>
+                <label for="modalUserPassword">Пароль (новий або для зміни):</label>
+                <input type="password" id="modalUserPassword" placeholder="Залиште порожнім, щоб не змінювати">
+            </div>
+            <div>
+                <label for="modalUserFullName">Повне ім'я:</label>
+                <input type="text" id="modalUserFullName">
+            </div>
+            <div>
+                <label for="modalUserStoreId">ID Магазину (порожнє, якщо не прив'язаний):</label>
+                <input type="number" id="modalUserStoreId" placeholder="Необов'язково">
+            </div>
+            <div>
+                <label for="modalUserRole">Роль:</label>
+                <select id="modalUserRole" required>
+                    <option value="cashier">Касир</option>
+                    <option value="admin">Адміністратор</option>
+                    <option value="manager">Менеджер</option>
+                </select>
+            </div>
+            <div>
+                <label for="modalUserIsActive" style="display: inline-block; margin-right: 5px;">Активний:</label>
+                <input type="checkbox" id="modalUserIsActive" checked>
+            </div>
+            <br>
+            <hr style="margin-top: 15px; margin-bottom:15px;">
+            <button type="submit">Зберегти</button>
+            <button type="button" id="cancelUserModalBtn" class="secondary-btn">Скасувати</button>
+        </form>
+    </div>
+</div>
